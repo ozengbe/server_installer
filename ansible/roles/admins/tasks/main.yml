@@ -54,6 +54,16 @@
   when: item in (ansible_facts['getent_group']['dp-admins'][2] | default('')).split(',')
   changed_when: true
 
+# Ubuntu 26.04 ships sudo-rs, which rejects some classic sudoers options.
+- name: Detect the sudo implementation
+  ansible.builtin.command: /usr/bin/readlink -f /usr/bin/sudo
+  register: admins_sudo_path
+  changed_when: false
+
+- name: Record whether sudo is sudo-rs
+  ansible.builtin.set_fact:
+    admins_sudo_rs: "{{ 'cargo' in admins_sudo_path.stdout or 'sudo-rs' in admins_sudo_path.stdout }}"
+
 - name: Sudo policy for dp-admins
   ansible.builtin.template:
     src: sudoers.j2

@@ -1,0 +1,10 @@
+---
+cache_engines:
+  redis:
+    package: redis-server
+    service: redis-server
+    config: /etc/redis/redis.conf
+  valkey:
+    package: valkey-server
+    service: valkey-server
+    config: /etc/valkey/valkey.conf

@@ -1,0 +1,14 @@
+---
+# Published at https://nginx.org/en/linux_packages.html; verified 2026-11-09
+# against the downloaded key and the noble InRelease signature.
+nginx_pinned_fingerprints:
+  - 573BFD6B3D8FBC641079A6ABABF5BD827BD9BF62
+  - 8540A6F18833A80E9C1653A42FD21310B49F6B46
+  - 9E9BE90EACBCDE69FE9B204CBCDCD8A38D88A2B3
+
+nginx_config_files:
+  - { src: nginx.conf.j2, dest: /etc/nginx/nginx.conf }
+  - { src: tls.conf.j2, dest: /etc/nginx/domainpilot/snippets/tls.conf }
+  - { src: security-headers.conf.j2, dest: /etc/nginx/domainpilot/snippets/security-headers.conf }
+  - { src: deny-sensitive.conf.j2, dest: /etc/nginx/domainpilot/snippets/deny-sensitive.conf }
+  - { src: default-server.conf.j2, dest: /etc/nginx/domainpilot/default-server.conf }

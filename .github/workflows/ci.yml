@@ -30,6 +30,13 @@ jobs:
           echo "GitHub Actions runner (disposable)" | sudo tee /etc/domainpilot-test-vm
           sudo apt-get update -qq
           sudo apt-get install -y -qq python3-pytest
+          # The runner image ships MySQL, PHP (third-party PPA), nginx and Apache.
+          # A real DomainPilot host starts clean; remove them so the test is representative.
+          sudo systemctl stop mysql nginx apache2 2>/dev/null || true
+          sudo apt-get purge -y -qq 'mysql-*' 'php*' 'nginx*' 'apache2*' 'libapache2-*' || true
+          sudo rm -f /etc/apt/sources.list.d/*ondrej* /etc/apt/sources.list.d/*php*
+          sudo rm -rf /etc/mysql /var/lib/mysql /etc/nginx /etc/php
+          sudo apt-get update -qq
           mkdir -p ~/.ssh && ssh-keygen -q -t ed25519 -N '' -f ~/.ssh/id_ed25519
           cat ~/.ssh/id_ed25519.pub >> ~/.ssh/authorized_keys
       - name: Install (first run)

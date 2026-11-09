@@ -29,8 +29,8 @@ PermitTunnel no
 
 HostKey /etc/ssh/ssh_host_ed25519_key
 HostKey /etc/ssh/ssh_host_rsa_key
-# OpenSSH 9.6 (Ubuntu 24.04): sntrup761 hybrid post-quantum KEX first.
-KexAlgorithms sntrup761x25519-sha512@openssh.com,curve25519-sha256,curve25519-sha256@libssh.org
+# Hybrid post-quantum KEX first (ML-KEM on OpenSSH 10, sntrup761 on 9.6). Per release in group_vars.
+KexAlgorithms {{ dp_ssh_kex }}
 Ciphers chacha20-poly1305@openssh.com,aes256-gcm@openssh.com,aes128-gcm@openssh.com
 MACs hmac-sha2-512-etm@openssh.com,hmac-sha2-256-etm@openssh.com
 HostKeyAlgorithms ssh-ed25519,ssh-ed25519-cert-v01@openssh.com,rsa-sha2-512,rsa-sha2-256

@@ -2,14 +2,14 @@
 
 A secure-by-default Ubuntu 24.04 web server manager: Ansible-hardened hosts, strict per-tenant isolation, and a `site` CLI.
 
-**Status: Phase 2a (host baseline: SSH, firewall, kernel hardening) implemented; services follow in 2b. Not for production use.**
+**Status: Phase 2 (hardened host baseline + core services) implemented; tenant isolation (Phase 4) is next after the CLI foundation (Phase 3). Not for production use.**
 
 ## Documents
 - [Architecture](docs/architecture.md): components, isolation model, privilege model, open decisions
 - [Threat model](docs/threat-model.md)
 - [Security baseline](docs/security-baseline.md)
 - [CLI specification](docs/cli-spec.md)
-- [Install guide (Phase 2a)](docs/install.md)
+- [Install guide](docs/install.md)
 - [Roadmap](docs/roadmap.md)
 
 ## Development

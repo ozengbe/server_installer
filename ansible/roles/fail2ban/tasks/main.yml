@@ -1,0 +1,60 @@
+---
+- name: Install fail2ban
+  ansible.builtin.apt:
+    name: fail2ban
+    state: present
+
+# fail2ban refuses to start a jail whose log file is missing.
+- name: Ensure the nginx error log exists for the nginx-limit-req jail
+  ansible.builtin.file:
+    path: /var/log/nginx/error.log
+    state: touch
+    owner: root
+    group: adm
+    mode: "0640"
+    modification_time: preserve
+    access_time: preserve
+
+- name: Apply fail2ban configuration with validation and restore on failure
+  block:
+    - name: DomainPilot jails
+      ansible.builtin.template:
+        src: domainpilot.local.j2
+        dest: /etc/fail2ban/jail.d/domainpilot.local
+        owner: root
+        group: root
+        mode: "0644"
+        backup: true
+      register: f2b_jails
+      notify: Reload fail2ban
+
+    - name: Validate fail2ban configuration
+      ansible.builtin.command: /usr/bin/fail2ban-client --test
+      changed_when: false
+
+  rescue:
+    - name: Restore previous jails
+      ansible.builtin.copy:
+        src: "{{ f2b_jails.backup_file }}"
+        dest: /etc/fail2ban/jail.d/domainpilot.local
+        remote_src: true
+        owner: root
+        group: root
+        mode: "0644"
+      when: f2b_jails.backup_file is defined
+
+    - name: Remove new jails that had no predecessor
+      ansible.builtin.file:
+        path: /etc/fail2ban/jail.d/domainpilot.local
+        state: absent
+      when: f2b_jails.backup_file is not defined
+
+    - name: Stop after fail2ban validation failure
+      ansible.builtin.fail:
+        msg: "fail2ban configuration failed validation; previous configuration restored."
+
+- name: Enable fail2ban
+  ansible.builtin.systemd_service:
+    name: fail2ban
+    enabled: true
+    state: started

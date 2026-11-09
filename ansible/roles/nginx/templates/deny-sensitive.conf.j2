@@ -1,0 +1,6 @@
+# Managed by DomainPilot. Included by site templates (Phase 5).
+# Hidden files and directories, except ACME/.well-known.
+location ~ /\.(?!well-known/) { return 404; }
+# VCS metadata, backups, editor swap files, dumps, env and dependency manifests.
+location ~* (?:\.(?:bak|backup|old|orig|save|swp|swo|tmp|sql|sqlite|db|log|ini|env|dist)|~)$ { return 404; }
+location ~* /(?:composer\.(?:json|lock)|package(?:-lock)?\.json|yarn\.lock|Dockerfile|Makefile|phpunit\.xml)$ { return 404; }

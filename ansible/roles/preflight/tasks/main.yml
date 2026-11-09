@@ -1,10 +1,12 @@
 ---
-- name: Require Ubuntu 24.04
+- name: Require a supported Ubuntu LTS release
   ansible.builtin.assert:
     that:
       - ansible_facts['distribution'] == 'Ubuntu'
-      - ansible_facts['distribution_version'] == '24.04'
-    fail_msg: "DomainPilot supports Ubuntu 24.04 LTS only (found {{ ansible_facts['distribution'] }} {{ ansible_facts['distribution_version'] }})."
+      - ansible_facts['distribution_version'] in dp_supported_releases
+    fail_msg: >-
+      DomainPilot supports Ubuntu {{ dp_supported_releases | join(' and ') }} LTS only
+      (found {{ ansible_facts['distribution'] }} {{ ansible_facts['distribution_version'] }}).
 
 - name: Require systemd and cgroup v2
   ansible.builtin.stat:
@@ -18,11 +20,12 @@
       - dp_cgroup2.stat.exists
     fail_msg: "systemd with the unified cgroup v2 hierarchy is required."
 
+# Regexes end in \Z, not $: in Python, $ also matches before a trailing newline.
 - name: Validate admin definitions
   ansible.builtin.assert:
     that:
       - dp_admin_names | length > 0
-      - dp_admin_names | select('match', '^[a-z][a-z0-9_-]{0,30}$') | list | length == dp_admin_names | length
+      - dp_admin_names | select('match', '^[a-z][a-z0-9_-]{0,30}\Z') | list | length == dp_admin_names | length
       - dp_admin_names | unique | length == dp_admin_names | length
       - dp_admin_names | intersect(dp_admins_revoked) | length == 0
     fail_msg: >-
@@ -42,7 +45,7 @@
   loop_control:
     label: "{{ item.name }}"
   vars:
-    dp_key_regex: '^(ssh-ed25519|sk-ssh-ed25519@openssh\.com|ecdsa-sha2-nistp(256|384|521)|sk-ecdsa-sha2-nistp256@openssh\.com|ssh-rsa) [A-Za-z0-9+/]+={0,3}( [^\r\n]*)?$'  # noqa: yaml[line-length]
+    dp_key_regex: '^(ssh-ed25519|sk-ssh-ed25519@openssh\.com|ecdsa-sha2-nistp(256|384|521)|sk-ecdsa-sha2-nistp256@openssh\.com|ssh-rsa) [A-Za-z0-9+/]+={0,3}( [^\r\n]*)?\Z'  # noqa: yaml[line-length]
 
 - name: Determine the operator account
   ansible.builtin.set_fact:

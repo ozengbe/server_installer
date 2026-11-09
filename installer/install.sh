@@ -37,7 +37,7 @@ done
 [[ $EUID -eq 0 ]] || die "run with sudo"
 # shellcheck source=/dev/null
 . /etc/os-release
-[[ ${ID:-} == ubuntu && ${VERSION_ID:-} == "24.04" ]] || die "Ubuntu 24.04 LTS required (found ${PRETTY_NAME:-unknown})"
+case "${ID:-}:${VERSION_ID:-}" in ubuntu:24.04|ubuntu:26.04) ;; *) die "Ubuntu 24.04 or 26.04 LTS required (found ${PRETTY_NAME:-unknown})" ;; esac
 
 confirm() {
   [[ $ASSUME_YES -eq 1 ]] && return 0

@@ -41,7 +41,7 @@ Status: **PROPOSED**. Method: asset- and trust-boundary-based, with STRIDE appli
 | ID | Boundary | Threat (STRIDE) | Mitigation | Verified by |
 |---|---|---|---|---|
 | TH1 | B3 | T2 reads/writes another tenant's files (I/T) | Unique UIDs, 0750 roots, per-tenant mount namespace (other trees not mounted), AppArmor profile per tenant, SFTP chroot | isolation test FS-* |
-| TH2 | B3 | T2 connects to another tenant's PHP/Redis socket (E) | Socket dirs `tid:www-data 0750`; not mounted in other namespaces | isolation test SOCK-* |
+| TH2 | B3 | T2 connects to another tenant's PHP/Redis socket (E) | Socket dirs `tid:nginx 0750`; not mounted in other namespaces | isolation test SOCK-* |
 | TH3 | B3 | T2 sees/kills other tenants' processes, reads `/proc/<pid>/environ` (I) | `ProtectProc=invisible`, `ProcSubset=pid`, separate UIDs, `hidepid` on host `/proc` | PROC-* |
 | TH4 | B5 | T2 reaches cloud metadata and steals instance credentials (E) | nftables drop + `IPAddressDeny` (two independent layers), v4 and v6 | NET-META-* |
 | TH5 | B5 | T2 reaches localhost services (exporters, MariaDB TCP, other tenants' accidental listeners) (E/I) | MariaDB `skip-networking`, Redis `port 0`, nft drops all tenant-cgroup loopback traffic | NET-LO-* |

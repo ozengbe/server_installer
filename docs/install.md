@@ -1,6 +1,6 @@
-# Installing the DomainPilot host baseline (Phase 2a)
+# Installing the DomainPilot host baseline (Phase 2)
 
-> **Preview.** Phase 2a hardens the base system, SSH and the firewall. Web services arrive in Phase 2b.
+> **Preview.** Phase 2 hardens the base system, SSH and the firewall, and installs the core services. Websites come with the `site` CLI (Phases 3–5).
 > Try it on a disposable VM first.
 
 ## Before you start
@@ -50,3 +50,20 @@ For remote Ansible runs, set `dp_firewall_confirm_mode: remote`. Ansible then re
 - **SSH:** the installer validates with `sshd -t` and restores the previous drop-in if validation fails. To revert by hand from the console, delete `/etc/ssh/sshd_config.d/00-domainpilot.conf` and the `DomainPilot managed block` in `/etc/ssh/sshd_config`, then run `systemctl reload ssh`.
 - **sysctl:** delete `/etc/sysctl.d/99-zz-domainpilot.conf` and reboot. Some settings, such as `kexec_load_disabled`, can't be undone without a reboot.
 - **/tmp hardening:** `systemctl disable tmp.mount`, then reboot.
+
+## Services installed (Phase 2b)
+
+| Service | Source | State after install |
+|---|---|---|
+| nginx (stable) | nginx.org signed repo. The key is vendored in this repo and its fingerprints pinned. | Running, sandboxed by systemd. Unknown hostnames get 444 and TLS handshakes are rejected. |
+| PHP 8.3 FPM | Ubuntu archive | **Shared service masked.** Each site gets its own sandboxed PHP master in Phase 4. |
+| MariaDB 10.11 | Ubuntu archive | Unix socket only (`skip-networking`), no `LOAD DATA LOCAL`, no anonymous users or test DB |
+| Redis 7.0 | Ubuntu archive (universe) | **Shared instance masked.** Per-site socket-only instances come in Phase 4. |
+| fail2ban | Ubuntu archive (universe) | Jails `sshd`, `nginx-limit-req`, `recidive`. Bans go in fail2ban's own nftables table. Admin allowlists are never banned. |
+| unattended-upgrades | Ubuntu archive | Security pocket only, daily at `dp_updates_window_start`, **never reboots** |
+
+Health check: `sudo dp-healthcheck` (or `--json`). It runs automatically after every unattended upgrade and logs failures to the journal at priority `err`. Exit code 10 means warnings only, such as a pending reboot.
+
+**Updates that are deliberately not automatic:** nginx.org releases, PHP minor/major versions, MariaDB major versions, and kernel reboots. Run them in a maintenance window (`site system update`, Phase 7). MariaDB is never restarted by needrestart.
+
+**Rollback:** every service config change is validated (`nginx -t`, `fail2ban-client --test`, MariaDB start) and the previous file is restored if validation fails. To remove a service's DomainPilot config by hand, delete the file named in its "Managed by DomainPilot" header and restart the service.

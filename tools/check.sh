@@ -12,7 +12,7 @@ echo "== pytest";      pytest --cov=domainpilot --cov-report=term-missing
 if command -v shellcheck >/dev/null 2>&1; then
   echo "== shellcheck"
   find . -name '*.sh' -not -path './.git/*' -print0 | xargs -0 shellcheck
-  shellcheck ansible/roles/firewall/files/dp-firewall
+  shellcheck ansible/roles/firewall/files/dp-firewall ansible/roles/updates/files/dp-healthcheck
 else
   echo "== shellcheck: not installed, skipped (CI runs it)"
 fi

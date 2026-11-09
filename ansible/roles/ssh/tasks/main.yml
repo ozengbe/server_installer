@@ -82,3 +82,20 @@
     - name: Stop after sshd validation failure
       ansible.builtin.fail:
         msg: "sshd configuration failed validation; previous configuration restored, sshd not reloaded."
+
+# A freshly installed openssh-server on a minimal image has ssh.socket enabled
+# but not started. Start socket activation only if no sshd unit is running;
+# a standalone ssh.service that is already running is left alone (both would
+# bind port 22).
+- name: Read sshd unit states
+  ansible.builtin.command: /usr/bin/systemctl is-active ssh.service ssh.socket  # noqa: command-instead-of-module
+  register: ssh_units
+  changed_when: false
+  failed_when: false
+
+- name: Start socket-activated sshd when no sshd unit is running
+  ansible.builtin.systemd_service:
+    name: ssh.socket
+    enabled: true
+    state: started
+  when: "'active' not in ssh_units.stdout_lines"

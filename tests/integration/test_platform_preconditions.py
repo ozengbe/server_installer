@@ -1,4 +1,4 @@
-"""Runs only inside a disposable Ubuntu 24.04 test VM (tools/vm.sh test).
+"""Runs only inside a disposable Ubuntu 24.04 or 26.04 test host (tools/vm.sh test).
 
 Checks that the kernel/userspace features the isolation model depends on
 (architecture §4) exist before any later phase relies on them.
@@ -24,10 +24,10 @@ def _os_release() -> dict[str, str]:
     return data
 
 
-def test_ubuntu_2404() -> None:
+def test_supported_ubuntu_release() -> None:
     rel = _os_release()
     assert rel.get("ID") == "ubuntu"
-    assert rel.get("VERSION_ID") == "24.04"
+    assert rel.get("VERSION_ID") in ("24.04", "26.04")
 
 
 def test_cgroup_v2_unified() -> None:

@@ -1,7 +1,7 @@
 ---
 # DomainPilot host baseline.
 # Phase 2a: preflight, base, sysctl, apparmor, admins, ssh, firewall.
-# Phase 2b adds: nginx, php, mariadb, redis/valkey, fail2ban, updates.
+# Phase 2b: nginx, php, mariadb, cache (redis|valkey), fail2ban, updates.
 - name: DomainPilot host baseline
   hosts: all
   become: true
@@ -21,3 +21,15 @@
       tags: [ssh]
     - role: firewall
       tags: [firewall]
+    - role: nginx
+      tags: [nginx, services]
+    - role: php
+      tags: [php, services]
+    - role: mariadb
+      tags: [mariadb, services]
+    - role: cache
+      tags: [cache, services]
+    - role: fail2ban
+      tags: [fail2ban, services]
+    - role: updates
+      tags: [updates]

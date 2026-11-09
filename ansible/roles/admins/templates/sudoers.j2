@@ -1,5 +1,8 @@
 # Managed by DomainPilot (role admins). Validated with visudo before install.
 Defaults        use_pty
+{% if not admins_sudo_rs %}
+# Options below are not supported by sudo-rs (default sudo on Ubuntu 26.04).
 Defaults        log_subcmds
 Defaults:%dp-admins  !lecture
+{% endif %}
 %dp-admins ALL=(ALL:ALL) {{ 'NOPASSWD: ' if dp_admin_sudo_nopasswd | bool else '' }}ALL

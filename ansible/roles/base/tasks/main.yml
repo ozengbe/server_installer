@@ -22,11 +22,14 @@
       ansible.builtin.apt:
         name: systemd-timesyncd
         state: present
+    # In containers the host keeps time and the unit's
+    # ConditionVirtualization=!container prevents it from starting.
     - name: Enable systemd-timesyncd
       ansible.builtin.systemd_service:
         name: systemd-timesyncd
         enabled: true
         state: started
+      when: ansible_facts['virtualization_type'] not in ['docker', 'container', 'containerd', 'lxc', 'podman']
 
 - name: Create DomainPilot directories
   ansible.builtin.file:
@@ -42,6 +45,7 @@
     - { path: /var/lib/domainpilot/firewall, mode: "0700" }
     - { path: /var/log/domainpilot, mode: "0750" }
     - { path: /usr/local/lib/domainpilot, mode: "0755" }
+    - { path: /etc/systemd/journald.conf.d, mode: "0755" }
 
 - name: Persistent, size-capped journal
   ansible.builtin.copy:
