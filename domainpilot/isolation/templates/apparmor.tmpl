@@ -1,0 +1,69 @@
+# Managed by DomainPilot: AppArmor profile for tenant ${tenant}'s services
+# (PHP-FPM and cache). Only this tenant's paths are reachable; no other program
+# may be executed.
+abi <abi/4.0>,
+include <tunables/global>
+
+profile domainpilot-tenant-${tenant} flags=(attach_disconnected,mediate_deleted) {
+  include <abstractions/base>
+  include <abstractions/nameservice>
+  include <abstractions/openssl>
+  include <abstractions/ssl_certs>
+
+  # Runtimes
+  /usr/sbin/php-fpm[0-9]* mr,
+  ${cache_server} mr,
+  /usr/lib/php/** mr,
+  /usr/share/php/** r,
+  /etc/php/** r,
+  /usr/share/zoneinfo/** r,
+  /usr/share/zoneinfo-icu/** r,
+  /usr/share/icu/** r,
+  owner @{PROC}/@{pid}/** r,
+  @{PROC}/sys/kernel/random/* r,
+  @{PROC}/sys/net/core/somaxconn r,
+  @{PROC}/sys/vm/overcommit_memory r,
+  @{PROC}/sys/kernel/mm/transparent_hugepage/enabled r,
+  /sys/kernel/mm/transparent_hugepage/** r,
+  /sys/devices/system/cpu/** r,
+  /sys/fs/cgroup/** r,
+
+  # This tenant only
+  ${etc_dir}/ r,
+  ${etc_dir}/** r,
+  ${root}/ r,
+  ${root}/app/ r,
+  ${root}/app/** r,
+  ${root}/data/ rw,
+  ${root}/data/** rwlk,
+  ${root}/tmp/ rw,
+  ${root}/tmp/** rwlk,
+  /tmp/ rw,
+  /tmp/** rwlk,
+  /var/tmp/ rw,
+  /var/tmp/** rwlk,
+  ${run_dir}/ r,
+  ${run_dir}/** rwlk,
+  ${log_dir}/ r,
+  ${log_dir}/** rwl,
+  ${cache_data}/ rw,
+  ${cache_data}/** rwlk,
+
+  # Shared services, by socket only
+  /run/mysqld/mysqld.sock rw,
+  /run/systemd/notify w,
+
+  network inet stream,
+  network inet6 stream,
+  network inet dgram,
+  network inet6 dgram,
+  network unix,
+  network netlink raw,
+  unix,
+
+  # Own processes only. On Ubuntu 26.04 systemd attaches the profile as a stack,
+  # so the processes are labelled "<profile>//&unconfined".
+  signal (send, receive) peer=domainpilot-tenant-${tenant},
+  signal (send, receive) peer="domainpilot-tenant-${tenant}//&unconfined",
+  signal (receive) peer=unconfined,
+}

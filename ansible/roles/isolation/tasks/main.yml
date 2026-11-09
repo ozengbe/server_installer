@@ -1,0 +1,66 @@
+---
+# Host-side pieces of tenant isolation. Per-tenant objects (users, slices,
+# drop-ins, AppArmor profiles) are created by the `site` CLI.
+
+- name: Tenant directory roots
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "{{ item.mode }}"
+  loop:
+    # 0711: traversable (nginx, own tenant) but not listable.
+    - { path: /srv/tenants, mode: "0711" }
+    - { path: /run/domainpilot, mode: "0711" }
+    - { path: /etc/domainpilot/tenants, mode: "0700" }
+    - { path: /var/log/domainpilot/tenants, mode: "0711" }
+    - { path: /var/lib/domainpilot/cache, mode: "0711" }
+    - { path: /etc/apparmor.d/domainpilot, mode: "0755" }
+
+- name: Keep /run/domainpilot across reboots with the right mode
+  ansible.builtin.copy:
+    dest: /etc/tmpfiles.d/domainpilot.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Managed by DomainPilot
+      d /run/domainpilot 0711 root root -
+
+- name: Parent slice for all tenants
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/dptenants.slice
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Managed by DomainPilot: all tenant workloads live below this slice.
+      [Unit]
+      Description=DomainPilot tenants
+      Before=slices.target
+
+      [Slice]
+      CPUAccounting=yes
+      MemoryAccounting=yes
+      TasksAccounting=yes
+      IOAccounting=yes
+  notify: Reload systemd
+
+- name: Tenant sandbox unit templates
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "/etc/systemd/system/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: [dp-php@.service, dp-cache@.service]
+  notify: Reload systemd
+
+- name: Host facts for the site CLI
+  ansible.builtin.template:
+    src: host.toml.j2
+    dest: /etc/domainpilot/host.toml
+    owner: root
+    group: root
+    mode: "0644"

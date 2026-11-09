@@ -63,6 +63,10 @@ _MIGRATIONS: Sequence[str] = (
     );
     CREATE INDEX operations_target ON operations(target, status);
     """,
+    # 2: per-tenant settings (PHP version, cache, resource limits) as JSON
+    """
+    ALTER TABLE tenants ADD COLUMN settings TEXT NOT NULL DEFAULT '{}';
+    """,
 )
 
 
@@ -192,6 +196,30 @@ class Registry:
             )
             if cur.rowcount != 1:
                 raise OperationFailed(f"tenant {tenant_id} not found")
+
+    def get_tenant_settings(self, tenant_id: str) -> dict[str, Any]:
+        row = self._conn.execute(
+            "SELECT settings FROM tenants WHERE id = ?", (tenant_id,)
+        ).fetchone()
+        if row is None:
+            raise OperationFailed(f"tenant {tenant_id} not found")
+        data: dict[str, Any] = json.loads(row[0])
+        return data
+
+    def set_tenant_settings(self, tenant_id: str, settings: dict[str, Any]) -> None:
+        with self._tx() as conn:
+            cur = conn.execute(
+                "UPDATE tenants SET settings = ?, updated_at = ? WHERE id = ?",
+                (json.dumps(settings, sort_keys=True), _now(), tenant_id),
+            )
+            if cur.rowcount != 1:
+                raise OperationFailed(f"tenant {tenant_id} not found")
+
+    def list_tenants(self) -> list[Tenant]:
+        rows = self._conn.execute(
+            "SELECT id, uid, status, tier, host, created_at FROM tenants ORDER BY seq"
+        ).fetchall()
+        return [Tenant(*r) for r in rows]
 
     def get_tenant(self, tenant_id: str) -> Tenant | None:
         row = self._conn.execute(

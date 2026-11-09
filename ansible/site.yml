@@ -2,6 +2,7 @@
 # DomainPilot host baseline.
 # Phase 2a: preflight, base, sysctl, apparmor, admins, ssh, firewall.
 # Phase 2b: nginx, php, mariadb, cache (redis|valkey), fail2ban, updates.
+# Phase 4: isolation (tenant sandbox templates), cli (the `site` command).
 - name: DomainPilot host baseline
   hosts: all
   become: true
@@ -33,3 +34,7 @@
       tags: [fail2ban, services]
     - role: updates
       tags: [updates]
+    - role: isolation
+      tags: [isolation]
+    - role: cli
+      tags: [cli]

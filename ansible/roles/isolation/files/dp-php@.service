@@ -1,0 +1,68 @@
+# Managed by DomainPilot. Sandbox for one tenant's PHP-FPM master (architecture §4.4).
+# Per-tenant settings (PHP version, slice) come from the drop-in written by `site`:
+#   /etc/systemd/system/dp-php@<tenant>.service.d/10-tenant.conf
+[Unit]
+Description=DomainPilot PHP-FPM for tenant %i
+After=network.target mariadb.service dp-cache@%i.service
+Wants=dp-cache@%i.service
+ConditionPathExists=/etc/domainpilot/tenants/%i/php-fpm.conf
+# Bounded self-healing: no endless restart loops.
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=notify
+User=%i
+Group=%i
+ExecStart=/bin/false
+ExecReload=/bin/kill -USR2 $MAINPID
+Restart=on-failure
+RestartSec=5
+UMask=0027
+
+RuntimeDirectory=domainpilot/%i/php
+RuntimeDirectoryMode=0750
+# Kept on stop: the other unit of this tenant may have it bind-mounted.
+RuntimeDirectoryPreserve=yes
+
+# Only this tenant's paths exist inside the namespace.
+TemporaryFileSystem=/srv/tenants:ro /etc/domainpilot:ro /var/log/domainpilot:ro /run/domainpilot:ro /var/lib/domainpilot:ro
+BindReadOnlyPaths=/srv/tenants/%i /srv/tenants/%i/app /etc/domainpilot/tenants/%i
+BindPaths=/srv/tenants/%i/data /srv/tenants/%i/tmp /var/log/domainpilot/tenants/%i /run/domainpilot/%i/php
+BindReadOnlyPaths=-/run/domainpilot/%i/cache
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateDevices=yes
+ProtectProc=invisible
+ProcSubset=pid
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+KeyringMode=private
+RemoveIPC=yes
+
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictSUIDSGID=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@mount @swap @reboot @raw-io @module @clock @cpu-emulation @debug @obsolete
+SystemCallErrorNumber=EPERM
+
+# Second, independent layer next to the nftables egress policy.
+IPAddressDeny=169.254.0.0/16 fe80::/10 fd00:ec2::254/128
+
+AppArmorProfile=domainpilot-tenant-%i
+
+[Install]
+WantedBy=multi-user.target

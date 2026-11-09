@@ -49,7 +49,10 @@ ignore = ["N818"]
 
 [tool.ruff.lint.per-file-ignores]
 # Tests: asserts, fixed system binaries, fake /tmp paths as payloads, seeded fuzzing.
-"tests/**" = ["S101", "S603", "S108", "S311", "PTH"]
+"tests/**" = ["S101", "S105", "S106", "S603", "S108", "S311", "PTH"]
 # core/ uses os-level calls deliberately: fd-based, O_NOFOLLOW and dir_fd
 # semantics that pathlib does not expose.
 "domainpilot/core/**" = ["PTH"]
+# The mariadb CLI has no parameter binding; every identifier is validated
+# (validate.tenant_id / db_name) and passwords are token_urlsafe before use.
+"domainpilot/isolation/db.py" = ["S608"]

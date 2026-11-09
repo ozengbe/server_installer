@@ -209,6 +209,17 @@ Enforcement:
 - **IPv4 and IPv6** rules are written once in an `inet` family table, so both protocols are always covered.
 - `site <domain> isolation test` actively checks every rule from inside the tenant's sandbox (see roadmap Phase 9).
 
+### 4.5a Implementation notes (Phase 4, verified on Ubuntu 26.04)
+
+- **Sockets:** `/run/domainpilot/<tid>/php/php.sock` and `.../cache/cache.sock`. `/run/domainpilot` is 0711 (traversable, not listable). nginx reaches PHP because the `nginx` user is a member of each tenant group. Other tenants can't reach the sockets, because they aren't members and because the paths don't exist inside their namespace.
+- **Units:** `dp-php@.service` and `dp-cache@.service` (installer) carry the whole sandbox. A per-tenant drop-in written by `site` only sets the binary and the slice `dptenants-<tid>.slice`, which holds the limits.
+- **AppArmor:** one profile per tenant, `domainpilot-tenant-<tid>`. On 26.04 systemd attaches it as a stack (`<profile>//&unconfined`), which is just as restrictive; the profile allows signals to the tenant's own stacked label. Processes can only execute the PHP-FPM or cache binary, so `mail()` and any `exec` bypass of `disable_functions` fail by design. Applications must send mail over SMTP; ports 25/465/587 are opt-in per tenant (`tenant_smtp_uids`).
+- **Egress:** nftables `meta skuid 20000-29999 jump tenant_egress` lets tenants reach only the DNS stub and outbound TCP 80/443. Loopback, RFC1918/CGNAT, link-local/metadata and multicast are dropped on IPv4 and IPv6. Matching on UID needs no per-tenant rules and can't fail at boot.
+- **Database:** `<tid>@localhost`, `unix_socket OR mysql_native_password`, ``ALL ON `<tid>_%`.*`` only, `MAX_USER_CONNECTIONS 20`.
+- **Code read-only for the runtime:** `app/` is owned by `<tid>-deploy` and mounted read-only in the PHP sandbox. Only `data/` and `tmp/` are writable.
+- **Measured:** systemd exposure score is at or below 2.0 for both units. The isolation suite (`tests/integration/test_phase4_isolation.py`) runs a probe through each tenant's own PHP-FPM.
+- **Deferred: per-tenant disk quotas.** ext4 project quotas need filesystem features (`project`, `quota`) that can't be enabled on a mounted root filesystem. That needs either an XFS/ext4 data volume for `/srv/tenants` prepared at install time, or provider-side volumes. Until then, disk use per tenant isn't capped (threat TH6 partially open).
+
 ### 4.6 Shared components and why they are trusted
 
 | Shared component | Risk | Mitigation |

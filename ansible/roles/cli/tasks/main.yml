@@ -1,0 +1,50 @@
+---
+# Installs the `site` CLI. Everything is root-owned and not writable by
+# anyone else: the CLI runs as root, so its code must be as protected as the
+# system itself.
+
+- name: Package directory
+  ansible.builtin.file:
+    path: /usr/lib/domainpilot
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install the DomainPilot Python package
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../domainpilot/"
+    dest: /usr/lib/domainpilot/domainpilot/
+    owner: root
+    group: root
+    mode: "u=rwX,go=rX"
+    directory_mode: "0755"
+
+- name: Remove bytecode copied from a development tree
+  ansible.builtin.find:
+    paths: /usr/lib/domainpilot/domainpilot
+    patterns: __pycache__
+    file_type: directory
+    recurse: true
+  register: cli_pycache
+  changed_when: false
+
+- name: Delete stray bytecode directories
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: absent
+  loop: "{{ cli_pycache.files }}"
+  loop_control:
+    label: "{{ item.path }}"
+
+- name: Install the site command
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../bin/site"
+    dest: /usr/local/bin/site
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Verify the CLI starts
+  ansible.builtin.command: /usr/local/bin/site version
+  changed_when: false

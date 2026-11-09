@@ -12,7 +12,7 @@ import argparse
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from domainpilot.cli import handlers
+from domainpilot.cli import handlers, tenant_handlers
 from domainpilot.cli.context import Handler
 
 Configure = Callable[[argparse.ArgumentParser], None]
@@ -102,25 +102,36 @@ COMMANDS: tuple[CommandSpec, ...] = (
     CommandSpec(S, ("ssl", "renew"), "M", 6, "Renew the certificate"),
     CommandSpec(S, ("ssl", "revoke"), "D", 6, "Revoke the certificate"),
     # --- PHP
-    CommandSpec(S, ("php", "status"), "R", 4, "Show the PHP runtime status"),
-    CommandSpec(S, ("php", "restart"), "M", 4, "Restart the site's PHP runtime"),
+    CommandSpec(
+        S, ("php", "status"), "R", 4, "Show the PHP runtime status", tenant_handlers.php_status
+    ),
+    CommandSpec(
+        S, ("php", "restart"), "M", 4, "Restart the site's PHP runtime", tenant_handlers.php_restart
+    ),
     CommandSpec(S, ("php", "optimize"), "M", 7, "Tune the site's PHP-FPM pool"),
-    CommandSpec(S, ("php",), "M", 4, "Switch PHP version", configure=_php_version_arg),
+    CommandSpec(S, ("php",), "M", 5, "Switch PHP version", configure=_php_version_arg),
     CommandSpec(S, ("optimize",), "M", 7, "Analyze/optimize the site", configure=_optimize_args),
     # --- database
-    CommandSpec(S, ("db", "create"), "M", 4, "Create the site database"),
-    CommandSpec(S, ("db", "status"), "R", 4, "Show database status"),
+    CommandSpec(S, ("db", "create"), "M", 5, "Create the site database"),
+    CommandSpec(S, ("db", "status"), "R", 4, "Show database status", tenant_handlers.db_status),
     CommandSpec(S, ("db", "backup"), "M", 8, "Back up the database"),
     CommandSpec(S, ("db", "restore"), "D", 8, "Restore the database", configure=_restore_args),
-    CommandSpec(S, ("db", "credentials"), "M", 4, "Show or rotate database credentials"),
+    CommandSpec(S, ("db", "credentials"), "M", 5, "Show or rotate database credentials"),
     # --- SFTP
     CommandSpec(S, ("sftp", "create"), "M", 8, "Create an SFTP account"),
     CommandSpec(S, ("sftp", "list"), "R", 8, "List SFTP accounts"),
     CommandSpec(S, ("sftp", "revoke"), "D", 8, "Revoke an SFTP account", configure=_username_arg),
     # --- security & isolation
     CommandSpec(S, ("security",), "R", 9, "Security report for the site"),
-    CommandSpec(S, ("isolation", "status"), "R", 4, "Show isolation controls"),
-    CommandSpec(S, ("isolation", "audit"), "R", 4, "Audit isolation configuration"),
+    CommandSpec(
+        S,
+        ("isolation", "status"),
+        "R",
+        4,
+        "Show isolation controls",
+        tenant_handlers.isolation_status,
+    ),
+    CommandSpec(S, ("isolation", "audit"), "R", 9, "Audit isolation configuration"),
     CommandSpec(S, ("isolation", "test"), "R", 9, "Actively test isolation from inside"),
     # --- backups
     CommandSpec(S, ("backup",), "M", 8, "Back up the site"),
@@ -140,9 +151,25 @@ COMMANDS: tuple[CommandSpec, ...] = (
     CommandSpec(SY, ("security",), "R", 9, "Security report for the server"),
     CommandSpec(SY, ("audit",), "R", 9, "Full configuration audit"),
     CommandSpec(SY, ("optimize",), "M", 7, "Analyze/optimize the server", configure=_optimize_args),
-    CommandSpec(SY, ("firewall", "status"), "R", 4, "Firewall status"),
-    CommandSpec(SY, ("firewall", "confirm"), "M", 4, "Confirm a pending firewall change"),
-    CommandSpec(SY, ("firewall", "rollback"), "M", 4, "Roll back a pending firewall change"),
+    CommandSpec(
+        SY, ("firewall", "status"), "R", 4, "Firewall status", tenant_handlers.firewall_status
+    ),
+    CommandSpec(
+        SY,
+        ("firewall", "confirm"),
+        "M",
+        4,
+        "Confirm a pending firewall change",
+        tenant_handlers.firewall_confirm,
+    ),
+    CommandSpec(
+        SY,
+        ("firewall", "rollback"),
+        "M",
+        4,
+        "Roll back a pending firewall change",
+        tenant_handlers.firewall_rollback,
+    ),
 )
 
 

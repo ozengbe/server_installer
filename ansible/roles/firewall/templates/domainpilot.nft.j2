@@ -66,8 +66,29 @@ table inet domainpilot {
 		type filter hook forward priority filter; policy drop;
 	}
 
+	# Tenants allowed to send mail directly (added by `site`, opt-in per tenant).
+	set tenant_smtp_uids {
+		type uid
+	}
+
 	chain output {
 		type filter hook output priority filter; policy accept;
-		# Phase 4: per-tenant egress policy is inserted here (jump tenant_egress).
+		# Tenant runtime users (UID 20000-29999) get a default-deny egress policy.
+		# Matching on UID needs no per-tenant rules and cannot fail at boot.
+		meta skuid 20000-29999 jump tenant_egress
+	}
+
+	chain tenant_egress {
+		ct state established,related accept
+		# The local DNS resolver (systemd-resolved stub) only.
+		ip daddr 127.0.0.53 meta l4proto { tcp, udp } th dport 53 accept
+		# Never: loopback services, private networks, link-local / cloud metadata, multicast.
+		ip daddr { 0.0.0.0/8, 10.0.0.0/8, 100.64.0.0/10, 127.0.0.0/8, 169.254.0.0/16, 172.16.0.0/12, 192.168.0.0/16, 224.0.0.0/3 } counter drop comment "tenant: internal v4"
+		ip6 daddr { ::/127, ::ffff:0:0/96, fc00::/7, fe80::/10, ff00::/8 } counter drop comment "tenant: internal v6"
+		# Public web APIs and updates.
+		tcp dport { 80, 443 } accept
+		meta skuid @tenant_smtp_uids tcp dport { 25, 465, 587 } accept
+		limit rate 10/minute burst 20 packets log prefix "dp-tenant-egress-drop " level info
+		counter drop comment "tenant: default deny"
 	}
 }

@@ -29,10 +29,10 @@ def audit_log(tmp_path: Path) -> AuditLog:
 
 def test_registry_created_private_and_migrated(tmp_path: Path, registry: Registry) -> None:
     assert (tmp_path / "registry.sqlite3").stat().st_mode & 0o777 == 0o600
-    assert registry.schema_version() == 1
+    assert registry.schema_version() == 2
     registry.close()
     again = Registry.open(tmp_path / "registry.sqlite3")
-    assert again is not None and again.schema_version() == 1
+    assert again is not None and again.schema_version() == 2
 
 
 def test_registry_open_without_create(tmp_path: Path) -> None:

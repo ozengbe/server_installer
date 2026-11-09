@@ -67,3 +67,71 @@ def load(path: Path) -> Config:
         default_tier=tier,
         lock_timeout=timeout,
     )
+
+
+# --- host facts written by the installer -------------------------------------
+
+CACHE_ENGINES = {
+    "valkey": "/usr/bin/valkey-server",
+    "redis": "/usr/bin/redis-server",
+}
+
+
+@dataclass(frozen=True)
+class HostFacts:
+    """What the installer put on this host (/etc/domainpilot/host.toml)."""
+
+    release: str = "unknown"
+    default_php_version: str = "8.3"
+    php_versions: tuple[str, ...] = ("8.3",)
+    cache_engine: str = "valkey"
+    nginx_user: str = "nginx"
+
+    @property
+    def cache_server(self) -> str:
+        return CACHE_ENGINES[self.cache_engine]
+
+
+_HOST_KEYS: dict[str, type] = {
+    "release": str,
+    "default_php_version": str,
+    "php_versions": list,
+    "cache_engine": str,
+    "nginx_user": str,
+}
+
+
+def load_host(path: Path) -> HostFacts:
+    """Read host facts. A missing file means the installer has not run yet."""
+    if not path.exists():
+        return HostFacts()
+    try:
+        raw: dict[str, Any] = tomllib.loads(read_text_nofollow(path, max_bytes=64 * 1024))
+    except tomllib.TOMLDecodeError as exc:
+        raise ValidationError(f"{path}: invalid TOML: {exc}") from None
+    host = raw.get("host")
+    if set(raw) != {"host"} or not isinstance(host, dict):
+        raise ValidationError(f"{path}: expected a single [host] section")
+    for key, value in host.items():
+        expected = _HOST_KEYS.get(key)
+        if expected is None:
+            raise ValidationError(f"{path}: unknown key host.{key}")
+        if not isinstance(value, expected):
+            raise ValidationError(f"{path}: host.{key} must be {expected.__name__}")
+    versions = tuple(validate.php_version(v) for v in host.get("php_versions", ["8.3"]))
+    default = validate.php_version(host.get("default_php_version", versions[0]))
+    if default not in versions:
+        raise ValidationError(f"{path}: default PHP {default} is not installed")
+    engine = host.get("cache_engine", "valkey")
+    if engine not in CACHE_ENGINES:
+        raise ValidationError(f"{path}: host.cache_engine must be valkey or redis")
+    nginx_user = host.get("nginx_user", "nginx")
+    if nginx_user not in ("nginx", "www-data"):
+        raise ValidationError(f"{path}: host.nginx_user must be nginx or www-data")
+    return HostFacts(
+        release=host.get("release", "unknown"),
+        default_php_version=default,
+        php_versions=versions,
+        cache_engine=engine,
+        nginx_user=nginx_user,
+    )

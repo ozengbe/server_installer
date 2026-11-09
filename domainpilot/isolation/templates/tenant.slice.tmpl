@@ -1,0 +1,16 @@
+# Managed by DomainPilot: resource limits for tenant ${tenant} (all its services).
+[Unit]
+Description=DomainPilot tenant ${tenant}
+Before=slices.target
+
+[Slice]
+CPUAccounting=yes
+CPUQuota=${cpu_quota}%
+MemoryAccounting=yes
+MemoryHigh=${memory_high}M
+MemoryMax=${memory_max}M
+MemorySwapMax=${swap_max}M
+TasksAccounting=yes
+TasksMax=${tasks_max}
+IOAccounting=yes
+IOWeight=100

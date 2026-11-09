@@ -144,9 +144,10 @@ def ensure_dir(
     if stat.S_ISLNK(st.st_mode) or not stat.S_ISDIR(st.st_mode):
         raise OperationFailed(f"{path} exists and is not a real directory")
     if created:
-        os.chmod(path, mode)  # just created by us and verified not a symlink
+        # chown first: a later chown may clear setgid bits set by chmod.
         if uid is not None or gid is not None:
             os.chown(
                 path, -1 if uid is None else uid, -1 if gid is None else gid, follow_symlinks=False
             )
+        os.chmod(path, mode)  # just created by us and verified not a symlink
     return created
