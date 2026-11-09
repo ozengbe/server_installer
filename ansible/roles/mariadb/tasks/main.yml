@@ -1,0 +1,115 @@
+---
+- name: Install MariaDB (Ubuntu archive, LTS)
+  ansible.builtin.apt:
+    name: [mariadb-server, mariadb-client]
+    state: present
+
+- name: Empty directory for server-side file operations
+  ansible.builtin.file:
+    path: /var/lib/mysql-files
+    state: directory
+    owner: mysql
+    group: mysql
+    mode: "0700"
+
+- name: Apply MariaDB hardening with restore on failure
+  block:
+    - name: MariaDB hardening configuration
+      ansible.builtin.template:
+        src: 99-domainpilot.cnf.j2
+        dest: /etc/mysql/mariadb.conf.d/99-domainpilot.cnf
+        owner: root
+        group: root
+        mode: "0644"
+        backup: true
+      register: mariadb_cnf
+
+    # Restart (not reload) is needed for networking changes. Happens only when
+    # this file changes, i.e. on install or an explicit config change.
+    - name: Restart MariaDB after configuration change
+      ansible.builtin.systemd_service:
+        name: mariadb
+        state: restarted
+      when: mariadb_cnf is changed  # noqa: no-handler
+
+  rescue:
+    - name: Restore previous MariaDB configuration
+      ansible.builtin.copy:
+        src: "{{ mariadb_cnf.backup_file }}"
+        dest: /etc/mysql/mariadb.conf.d/99-domainpilot.cnf
+        remote_src: true
+        owner: root
+        group: root
+        mode: "0644"
+      when: mariadb_cnf.backup_file is defined
+
+    - name: Remove new MariaDB configuration that had no predecessor
+      ansible.builtin.file:
+        path: /etc/mysql/mariadb.conf.d/99-domainpilot.cnf
+        state: absent
+      when: mariadb_cnf.backup_file is not defined
+
+    - name: Start MariaDB with the previous configuration
+      ansible.builtin.systemd_service:
+        name: mariadb
+        state: restarted
+
+    - name: Stop after MariaDB failure
+      ansible.builtin.fail:
+        msg: "MariaDB failed to start with the new configuration; previous configuration restored."
+
+- name: MariaDB unit drop-in directory
+  ansible.builtin.file:
+    path: /etc/systemd/system/mariadb.service.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Bounded self-healing for MariaDB
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/mariadb.service.d/90-domainpilot.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Managed by DomainPilot
+      [Unit]
+      StartLimitIntervalSec=600
+      StartLimitBurst=3
+      [Service]
+      Restart=on-failure
+      RestartSec=10
+  register: mariadb_dropin
+
+- name: Enable MariaDB
+  ansible.builtin.systemd_service:
+    name: mariadb
+    enabled: true
+    state: started
+    daemon_reload: "{{ mariadb_dropin is changed }}"
+
+# Equivalent of mysql_secure_installation, idempotent. root uses unix_socket auth.
+- name: Find anonymous and remote root accounts
+  ansible.builtin.command: >-
+    /usr/bin/mariadb -NBe "SELECT CONCAT(QUOTE(User),'@',QUOTE(Host)) FROM mysql.user
+    WHERE User='' OR (User='root' AND Host NOT IN ('localhost'))"
+  register: mariadb_bad_users
+  changed_when: false
+
+- name: Drop anonymous and remote root accounts
+  ansible.builtin.command: /usr/bin/mariadb -e "DROP USER {{ item }}"
+  loop: "{{ mariadb_bad_users.stdout_lines }}"
+  changed_when: true
+
+- name: Find test database
+  ansible.builtin.command: /usr/bin/mariadb -NBe "SHOW DATABASES LIKE 'test'"
+  register: mariadb_testdb
+  changed_when: false
+
+- name: Drop test database and its grants
+  ansible.builtin.command: >-
+    /usr/bin/mariadb -e "DROP DATABASE IF EXISTS test;
+    DELETE FROM mysql.db WHERE Db='test' OR Db='test\\_%'; FLUSH PRIVILEGES;"
+  when: mariadb_testdb.stdout | length > 0
+  changed_when: true

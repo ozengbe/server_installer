@@ -32,7 +32,7 @@ Consequence: every runtime test has to run inside Ubuntu 24.04 VMs. Docker conta
 │                                                                           │
 │  nftables (default deny, v4+v6)   fail2ban   AppArmor   auditd/journald   │
 │                                                                           │
-│  ┌──────────── nginx (www-data, shared, trusted) ──────────────┐          │
+│  ┌──────────── nginx (user nginx, shared, trusted) ───────────┐          │
 │  │ default vhost = 444 · per-site vhosts · TLS · rate limits    │          │
 │  └──────┬──────────────────────┬──────────────────────┬────────┘          │
 │         │ unix sock            │ unix sock            │ unix sock         │
@@ -124,7 +124,7 @@ Tenants are identified internally by an opaque ID (`t0001`…). Domain names are
 | Writable data | `/srv/tenants/t0001/data` (uploads/cache, runtime-writable, **`noexec` via bind mount**) |
 | Temp | `/srv/tenants/t0001/tmp` (0700 runtime) plus systemd `PrivateTmp=yes` |
 | Logs | `/var/log/domainpilot/tenants/t0001/` (root-written nginx logs; PHP log owned by runtime). Read-only bind into the chroot. |
-| Runtime socket | `/run/domainpilot/t0001/php.sock` (dir `t0001:www-data 0750`, socket 0660) |
+| Runtime socket | `/run/domainpilot/t0001/php.sock` (dir `t0001:nginx 0750`, socket 0660; nginx.org packages run workers as `nginx`) |
 | PHP-FPM | `dp-php@t0001.service` (one master per tenant; config `/etc/domainpilot/tenants/t0001/php-fpm.conf`) |
 | Redis (optional) | `dp-redis@t0001.service`, unix socket only, `maxmemory` capped, ACL default user disabled |
 | Database | DB `t0001_<name>`, user `t0001`@`localhost`, grants only on `t0001\_%`, `MAX_USER_CONNECTIONS` set |

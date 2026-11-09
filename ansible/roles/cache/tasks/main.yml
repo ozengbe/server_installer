@@ -1,0 +1,26 @@
+---
+# Cache engine per release (group_vars dp_cache_engine): Redis on 24.04
+# (universe), Valkey on 26.04 (main). Each tenant gets its own unix-socket-only
+# instance in Phase 4, so the distro's shared TCP instance is never used.
+- name: Validate cache engine
+  ansible.builtin.assert:
+    that: dp_cache_engine in cache_engines
+    fail_msg: "dp_cache_engine must be one of {{ cache_engines.keys() | list }}"
+
+- name: Install {{ cache_engines[dp_cache_engine].package }}
+  ansible.builtin.apt:
+    name: "{{ cache_engines[dp_cache_engine].package }}"
+    state: present
+
+- name: Stop and mask the shared cache instance
+  ansible.builtin.systemd_service:
+    name: "{{ cache_engines[dp_cache_engine].service }}"
+    state: stopped
+    enabled: false
+    masked: true
+
+- name: Defence in depth if the shared instance is ever unmasked
+  ansible.builtin.lineinfile:
+    path: "{{ cache_engines[dp_cache_engine].config }}"
+    regexp: '^\s*port\s'
+    line: "port 0"

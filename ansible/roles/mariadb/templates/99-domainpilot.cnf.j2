@@ -1,0 +1,13 @@
+# Managed by DomainPilot (role mariadb). Sorts last in mariadb.conf.d, so it wins.
+[mysqld]
+# Unix socket only: tenants and exporters connect via /run/mysqld/mysqld.sock.
+skip-networking
+bind-address = 127.0.0.1
+local_infile = 0
+secure_file_priv = /var/lib/mysql-files
+symbolic-links = 0
+character-set-server = utf8mb4
+collation-server = utf8mb4_unicode_ci
+# Conservative defaults; Phase 7 optimizer sizes these to the host.
+max_connections = {{ dp_mariadb_max_connections }}
+innodb_buffer_pool_size = {{ dp_mariadb_innodb_buffer_pool_size }}

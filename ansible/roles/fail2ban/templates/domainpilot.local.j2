@@ -1,0 +1,33 @@
+# Managed by DomainPilot (role fail2ban). Bans go into fail2ban's own nftables
+# table; DomainPilot's "inet domainpilot" table is never touched.
+[DEFAULT]
+banaction = nftables-multiport
+banaction_allports = nftables-allports
+backend = systemd
+bantime = 1h
+bantime.increment = true
+bantime.maxtime = 1w
+findtime = 10m
+maxretry = 5
+# Admin addresses and SSH allowlists are never banned (anti-lockout).
+ignoreip = 127.0.0.1/8 ::1{% for net in dp_fail2ban_ignoreip + dp_ssh_allow_v4 + dp_ssh_allow_v6 %} {{ net }}{% endfor %}
+
+
+[sshd]
+enabled = true
+# "normal": one failed login counts once. "aggressive" also counts protocol
+# negotiation failures and banned an admin after three failed logins in testing.
+mode = normal
+
+[nginx-limit-req]
+enabled = true
+backend = auto
+logpath = /var/log/nginx/error.log
+maxretry = 20
+findtime = 1m
+
+[recidive]
+enabled = true
+backend = auto
+bantime = 1w
+findtime = 1d

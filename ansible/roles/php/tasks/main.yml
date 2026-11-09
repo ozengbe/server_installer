@@ -1,0 +1,50 @@
+---
+- name: Install PHP-FPM and extensions from the Ubuntu archive
+  ansible.builtin.apt:
+    name: "{{ php_packages }}"
+    state: present
+
+# The distro service runs ONE shared pool as www-data. DomainPilot runs one
+# sandboxed master per tenant instead (Phase 4), so the shared one is masked
+# (package upgrades cannot restart it either).
+- name: Stop and mask the shared PHP-FPM service
+  ansible.builtin.systemd_service:
+    name: "php{{ dp_php_version }}-fpm"
+    state: stopped
+    enabled: false
+    masked: true
+
+- name: Host-wide PHP-FPM hardening (tenants inherit; pools add per-site limits)
+  ansible.builtin.copy:
+    dest: "/etc/php/{{ dp_php_version }}/fpm/conf.d/99-domainpilot.ini"
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      ; Managed by DomainPilot (role php)
+      expose_php = Off
+      display_errors = Off
+      display_startup_errors = Off
+      log_errors = On
+      allow_url_include = Off
+      cgi.fix_pathinfo = 0
+      session.cookie_httponly = 1
+      session.cookie_secure = 1
+      session.cookie_samesite = Lax
+      session.use_strict_mode = 1
+      session.use_only_cookies = 1
+      mail.add_x_header = Off
+      opcache.enable = 1
+      opcache.memory_consumption = 128
+      opcache.interned_strings_buffer = 16
+      opcache.max_accelerated_files = 20000
+      opcache.validate_timestamps = 1
+      opcache.revalidate_freq = 2
+      ; Each tenant runs its own master, so OPcache is never shared across tenants.
+      opcache.validate_permission = 1
+      opcache.validate_root = 1
+      opcache.jit = disable
+
+- name: Validate PHP-FPM configuration syntax
+  ansible.builtin.command: /usr/sbin/php-fpm{{ dp_php_version }} -t
+  changed_when: false

@@ -1,0 +1,19 @@
+---
+- name: Enable AppArmor
+  ansible.builtin.systemd_service:
+    name: apparmor
+    enabled: true
+    state: started
+  tags: [host-kernel]
+
+- name: Read AppArmor kernel state
+  ansible.builtin.slurp:
+    src: /sys/module/apparmor/parameters/enabled
+  register: dp_aa_enabled
+  tags: [host-kernel]
+
+- name: Require AppArmor enabled in the kernel
+  ansible.builtin.assert:
+    that: (dp_aa_enabled.content | b64decode | trim) == 'Y'
+    fail_msg: "AppArmor is not enabled in the kernel (check the boot command line for apparmor=0)."
+  tags: [host-kernel]

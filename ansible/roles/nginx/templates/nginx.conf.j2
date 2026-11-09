@@ -1,0 +1,72 @@
+# Managed by DomainPilot (role nginx). Local changes will be overwritten.
+user nginx;
+worker_processes auto;
+worker_rlimit_nofile 65535;
+pid /run/nginx.pid;
+error_log /var/log/nginx/error.log warn;
+
+events {
+    worker_connections {{ dp_nginx_worker_connections }};
+    multi_accept on;
+}
+
+http {
+    include /etc/nginx/mime.types;
+    default_type application/octet-stream;
+
+    # Information disclosure
+    server_tokens off;
+    autoindex off;
+
+    # Logging (JSON for machine parsing; client IP is the real IP once real_ip is configured)
+    log_format dp_json escape=json
+        '{"time":"$time_iso8601","host":"$host","remote":"$remote_addr",'
+        '"method":"$request_method","uri":"$request_uri","status":$status,'
+        '"bytes":$body_bytes_sent,"rt":$request_time,"urt":"$upstream_response_time",'
+        '"ua":"$http_user_agent","proto":"$server_protocol","tls":"$ssl_protocol"}';
+    access_log /var/log/nginx/access.log dp_json;
+
+    # I/O
+    sendfile on;
+    tcp_nopush on;
+    tcp_nodelay on;
+    types_hash_max_size 2048;
+    server_names_hash_bucket_size 128;
+
+    # Request limits and timeouts (sites may tighten, never loosen without review)
+    client_max_body_size {{ dp_nginx_client_max_body_size }};
+    client_body_buffer_size 128k;
+    client_header_buffer_size 4k;
+    large_client_header_buffers 4 16k;
+    client_body_timeout 15s;
+    client_header_timeout 15s;
+    send_timeout 30s;
+    keepalive_timeout 15s;
+    keepalive_requests 1000;
+    reset_timedout_connection on;
+
+    # Rate and connection limiting (zones used by site templates)
+    limit_req_zone $binary_remote_addr zone=dp_req:20m rate={{ dp_nginx_rate_limit }};
+    limit_req_zone $binary_remote_addr zone=dp_login:10m rate=5r/m;
+    limit_conn_zone $binary_remote_addr zone=dp_conn:20m;
+    limit_req_status 429;
+    limit_conn_status 429;
+    limit_conn dp_conn {{ dp_nginx_conn_per_ip }};
+
+    # Compression (no compression of responses that mix secrets with attacker input
+    # is enforced per site; static text types only here)
+    gzip on;
+    gzip_vary on;
+    gzip_comp_level 5;
+    gzip_min_length 1024;
+    gzip_proxied any;
+    gzip_types text/plain text/css text/javascript application/javascript application/json
+               application/xml image/svg+xml application/manifest+json font/ttf font/otf;
+
+    # TLS defaults for every server block
+    include /etc/nginx/domainpilot/snippets/tls.conf;
+
+    # Default server first, then DomainPilot-managed sites (Phase 5).
+    include /etc/nginx/domainpilot/default-server.conf;
+    include /etc/nginx/domainpilot/sites/*.conf;
+}

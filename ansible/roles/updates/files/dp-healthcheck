@@ -1,0 +1,58 @@
+#!/bin/bash
+# dp-healthcheck - verify core services after updates (and on demand).
+#   dp-healthcheck [--post-update] [--json]
+# Exit codes: 0 healthy, 1 failures, 10 warnings only (e.g. reboot required).
+# Failures are logged to the journal with priority "err" for alerting (Phase 8).
+set -uo pipefail
+export PATH=/usr/sbin:/usr/bin:/sbin:/bin LC_ALL=C
+
+JSON=0; CONTEXT=manual
+for a in "$@"; do
+  case "$a" in
+    --json) JSON=1 ;;
+    --post-update) CONTEXT=post-update ;;
+    *) echo "usage: dp-healthcheck [--post-update] [--json]" >&2; exit 2 ;;
+  esac
+done
+
+fails=(); warns=(); oks=()
+check() { # name, command...
+  local name=$1; shift
+  if "$@" >/dev/null 2>&1; then oks+=("$name"); else fails+=("$name"); fi
+}
+
+# shellcheck disable=SC2317  # invoked indirectly via check()
+ssh_up() { systemctl is-active --quiet ssh.socket || systemctl is-active --quiet ssh.service; }
+for svc in nginx mariadb fail2ban auditd apparmor; do
+  check "service:$svc" systemctl is-active --quiet "$svc"
+done
+check "service:ssh" ssh_up
+check "nginx:config" nginx -t -q
+check "firewall:table" nft list table inet domainpilot
+check "mariadb:socket" test -S /run/mysqld/mysqld.sock
+[[ -e /var/lib/domainpilot/firewall/pending ]] && warns+=("firewall:unconfirmed-change")
+[[ -e /run/reboot-required ]] && warns+=("reboot-required")
+failed_units=$(systemctl list-units --state=failed --no-legend --plain 2>/dev/null | awk '{print $1}' | paste -sd, -)
+[[ -n $failed_units ]] && warns+=("failed-units:$failed_units")
+
+if (( JSON )); then
+  j() { local out=""; for x in "$@"; do out+="${out:+,}\"$x\""; done; printf '[%s]' "$out"; }
+  printf '{"context":"%s","ok":%s,"failures":%s,"warnings":%s,"passed":%s}\n' \
+    "$CONTEXT" "$([[ ${#fails[@]} -eq 0 ]] && echo true || echo false)" \
+    "$(j "${fails[@]}")" "$(j "${warns[@]}")" "$(j "${oks[@]}")"
+else
+  for x in "${oks[@]}"; do echo "ok    $x"; done
+  for x in "${warns[@]}"; do echo "WARN  $x"; done
+  for x in "${fails[@]}"; do echo "FAIL  $x"; done
+fi
+
+if (( ${#fails[@]} )); then
+  logger -t dp-healthcheck -p user.err -- "($CONTEXT) FAILED: ${fails[*]}"
+  exit 1
+fi
+if (( ${#warns[@]} )); then
+  logger -t dp-healthcheck -p user.warning -- "($CONTEXT) warnings: ${warns[*]}"
+  exit 10
+fi
+logger -t dp-healthcheck -p user.info -- "($CONTEXT) healthy"
+exit 0

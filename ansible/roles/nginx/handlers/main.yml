@@ -1,0 +1,11 @@
+---
+# Handlers run after the validated block; nginx -t is re-checked to be safe.
+- name: Reload nginx
+  ansible.builtin.systemd_service:
+    name: nginx
+    state: reloaded
+
+- name: Restart nginx
+  ansible.builtin.systemd_service:
+    name: nginx
+    state: restarted

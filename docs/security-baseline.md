@@ -4,7 +4,7 @@ This is the target state the Ansible installer enforces and `site system audit` 
 
 ## Host
 - Ubuntu 24.04 LTS, minimal install. Only the packages listed in architecture §3. Any unexpected listening socket is an audit failure.
-- `/proc` mounted with `hidepid=invisible`. `/tmp` and `/dev/shm` have `nodev,nosuid,noexec`.
+- `/tmp` (tmpfs) and `/dev/shm` have `nodev,nosuid,noexec`. Host-wide `/proc` `hidepid` is **deferred**: it breaks polkit/logind on stock Ubuntu. Tenants get the same protection from `ProtectProc=invisible` inside their sandbox (Phase 4).
 - sysctl: `kernel.kptr_restrict=2`, `kernel.dmesg_restrict=1`, `kernel.unprivileged_bpf_disabled=1`, `kernel.yama.ptrace_scope=2`, `fs.protected_symlinks=1`, `fs.protected_hardlinks=1`, `fs.protected_fifos=2`, `fs.protected_regular=2`, `fs.suid_dumpable=0`, `net.ipv4.conf.all.rp_filter=1`, no IP forwarding (except WireGuard / Tier C as required), `kernel.apparmor_restrict_unprivileged_userns=1`.
 - AppArmor enabled. Every shipped and generated profile is in enforce mode.
 - Time sync via `systemd-timesyncd` or chrony (TLS and logs depend on correct time).
@@ -12,7 +12,7 @@ This is the target state the Ansible installer enforces and `site system audit` 
 
 ## SSH
 - `PermitRootLogin no`, `PasswordAuthentication no`, `KbdInteractiveAuthentication no`, `AuthenticationMethods publickey`.
-- `AllowGroups dp-admins dp-sftp`. `MaxAuthTries 3`, `LoginGraceTime 30`, `ClientAliveInterval 300`.
+- `AllowGroups dp-admins dp-sftp`. `MaxAuthTries 3`, `LoginGraceTime 30`, `ClientAliveInterval 300`. Keys only from root-owned `/etc/ssh/authorized_keys.d/%u`. Port stays 22 (moving it adds little and complicates socket activation and firewall transitions).
 - Modern algorithms only (curve25519/sntrup or mlkem hybrid KEX, chacha20-poly1305/aes-gcm, ed25519/sk-ed25519 host keys first).
 - `Match Group dp-sftp`: `ChrootDirectory /srv/tenants/%u-root` (exact layout fixed in Phase 8), `ForceCommand internal-sftp -l INFO`, and all forwarding and TTY allocation disabled.
 

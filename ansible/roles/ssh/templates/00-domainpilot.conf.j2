@@ -1,0 +1,37 @@
+# Managed by DomainPilot (role ssh). Local changes will be overwritten.
+# Included first by sshd_config; the first value obtained wins.
+
+PermitRootLogin no
+PubkeyAuthentication yes
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+PermitEmptyPasswords no
+AuthenticationMethods publickey
+AuthorizedKeysFile /etc/ssh/authorized_keys.d/%u
+AllowGroups dp-admins dp-sftp
+
+MaxAuthTries 3
+LoginGraceTime 30
+MaxSessions 4
+MaxStartups 10:30:60
+ClientAliveInterval 300
+ClientAliveCountMax 2
+UseDNS no
+PermitUserEnvironment no
+LogLevel VERBOSE
+
+X11Forwarding no
+AllowAgentForwarding no
+AllowTcpForwarding no
+AllowStreamLocalForwarding no
+GatewayPorts no
+PermitTunnel no
+
+HostKey /etc/ssh/ssh_host_ed25519_key
+HostKey /etc/ssh/ssh_host_rsa_key
+# Hybrid post-quantum KEX first (ML-KEM on OpenSSH 10, sntrup761 on 9.6). Per release in group_vars.
+KexAlgorithms {{ dp_ssh_kex }}
+Ciphers chacha20-poly1305@openssh.com,aes256-gcm@openssh.com,aes128-gcm@openssh.com
+MACs hmac-sha2-512-etm@openssh.com,hmac-sha2-256-etm@openssh.com
+HostKeyAlgorithms ssh-ed25519,ssh-ed25519-cert-v01@openssh.com,rsa-sha2-512,rsa-sha2-256
+PubkeyAcceptedAlgorithms ssh-ed25519,ssh-ed25519-cert-v01@openssh.com,sk-ssh-ed25519@openssh.com,sk-ssh-ed25519-cert-v01@openssh.com,sk-ecdsa-sha2-nistp256@openssh.com,ecdsa-sha2-nistp256,ecdsa-sha2-nistp384,ecdsa-sha2-nistp521,rsa-sha2-512,rsa-sha2-256

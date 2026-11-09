@@ -1,0 +1,23 @@
+# Managed by DomainPilot. Catch-all for unknown hostnames and bare-IP requests:
+# HTTP gets the connection closed (444); TLS handshakes are rejected, so no
+# certificate (and no hosted hostname) is ever revealed.
+server {
+    listen 80 default_server;
+    listen [::]:80 default_server;
+    listen 443 ssl default_server;
+    listen [::]:443 ssl default_server;
+{% if dp_nginx_http3 | bool %}
+    listen 443 quic reuseport default_server;
+    listen [::]:443 quic reuseport default_server;
+{% endif %}
+    http2 on;
+    server_name _;
+
+    ssl_reject_handshake on;
+    # Never sent (handshake rejected); required by some nginx code paths.
+    ssl_certificate /etc/nginx/domainpilot/default-tls/cert.pem;
+    ssl_certificate_key /etc/nginx/domainpilot/default-tls/key.pem;
+
+    access_log off;
+    return 444;
+}

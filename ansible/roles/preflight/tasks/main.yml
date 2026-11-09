@@ -1,0 +1,91 @@
+---
+- name: Require a supported Ubuntu LTS release
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['distribution'] == 'Ubuntu'
+      - ansible_facts['distribution_version'] in dp_supported_releases
+    fail_msg: >-
+      DomainPilot supports Ubuntu {{ dp_supported_releases | join(' and ') }} LTS only
+      (found {{ ansible_facts['distribution'] }} {{ ansible_facts['distribution_version'] }}).
+
+- name: Require systemd and cgroup v2
+  ansible.builtin.stat:
+    path: /sys/fs/cgroup/cgroup.controllers
+  register: dp_cgroup2
+
+- name: Check init system and cgroup v2
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['service_mgr'] == 'systemd'
+      - dp_cgroup2.stat.exists
+    fail_msg: "systemd with the unified cgroup v2 hierarchy is required."
+
+# Regexes end in \Z, not $: in Python, $ also matches before a trailing newline.
+- name: Validate admin definitions
+  ansible.builtin.assert:
+    that:
+      - dp_admin_names | length > 0
+      - dp_admin_names | select('match', '^[a-z][a-z0-9_-]{0,30}\Z') | list | length == dp_admin_names | length
+      - dp_admin_names | unique | length == dp_admin_names | length
+      - dp_admin_names | intersect(dp_admins_revoked) | length == 0
+    fail_msg: >-
+      dp_admins must list at least one admin with a valid lowercase username,
+      without duplicates, and none of them may also be in dp_admins_revoked.
+  vars:
+    dp_admin_names: "{{ dp_admins | map(attribute='name') | list }}"
+
+- name: Validate admin SSH keys
+  ansible.builtin.assert:
+    that:
+      - item.ssh_keys | default([]) | length > 0
+      - item.ssh_keys | select('match', dp_key_regex) | list | length == item.ssh_keys | length
+    fail_msg: "Admin {{ item.name }} needs at least one valid single-line OpenSSH public key."
+    quiet: true
+  loop: "{{ dp_admins }}"
+  loop_control:
+    label: "{{ item.name }}"
+  vars:
+    dp_key_regex: '^(ssh-ed25519|sk-ssh-ed25519@openssh\.com|ecdsa-sha2-nistp(256|384|521)|sk-ecdsa-sha2-nistp256@openssh\.com|ssh-rsa) [A-Za-z0-9+/]+={0,3}( [^\r\n]*)?\Z'  # noqa: yaml[line-length]
+
+- name: Determine the operator account
+  ansible.builtin.set_fact:
+    dp_operator: "{{ ansible_facts['env']['SUDO_USER'] | default(ansible_user | default(''), true) }}"
+
+- name: Refuse to lock out the operator
+  ansible.builtin.assert:
+    that:
+      - dp_i_understand_lockout_risk | bool or dp_operator in (dp_admins | map(attribute='name') | list)
+    fail_msg: >-
+      You are running this as '{{ dp_operator }}', which is not in dp_admins.
+      After hardening, only dp_admins can log in via SSH. Add yourself to dp_admins
+      (or set dp_i_understand_lockout_risk=true if access is managed elsewhere).
+
+- name: Validate firewall settings
+  ansible.builtin.assert:
+    that:
+      - dp_firewall_confirm_mode in ['manual', 'remote', 'immediate']
+      - dp_firewall_confirm_timeout | int >= 30 and dp_firewall_confirm_timeout | int <= 3600
+      - dp_ports | map('int') | select('ge', 1) | select('le', 65535) | list | length == dp_ports | length
+      - dp_wireguard_port | int >= 0 and dp_wireguard_port | int <= 65535
+      - dp_admin_tcp_forwarding in ['no', 'local']
+      - dp_rp_filter | int in [1, 2]
+  vars:
+    dp_ports: "{{ dp_firewall_public_tcp + dp_firewall_public_udp }}"
+
+- name: Check for an unconfirmed firewall change
+  ansible.builtin.stat:
+    path: /var/lib/domainpilot/firewall/pending
+  register: dp_fw_pending
+
+- name: Refuse to continue while a firewall change is pending
+  ansible.builtin.assert:
+    that: not dp_fw_pending.stat.exists
+    fail_msg: >-
+      A firewall change is waiting for confirmation. From a NEW ssh session run
+      `sudo dp-firewall confirm` (or `sudo dp-firewall rollback`), then re-run.
+
+- name: Validate fail2ban ignore list (IP or CIDR only; no injection into jail config)
+  ansible.builtin.assert:
+    that:
+      - dp_fail2ban_ignoreip | select('match', '^[0-9A-Fa-f:.]{2,39}(/[0-9]{1,3})?\Z') | list | length == dp_fail2ban_ignoreip | length
+    fail_msg: "dp_fail2ban_ignoreip entries must be IP addresses or CIDR ranges."
