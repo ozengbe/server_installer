@@ -28,6 +28,7 @@ include = ["domainpilot*"]
 [tool.pytest.ini_options]
 testpaths = ["tests/unit", "tests/security"]
 addopts = "-ra --strict-markers"
+pythonpath = ["tests"]
 markers = [
   "integration: needs a disposable Ubuntu 24.04 VM with root (never production)",
 ]
@@ -43,8 +44,12 @@ line-length = 100
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP", "S", "N", "SIM", "PTH", "RUF"]
-ignore = []
+# N818: exception names are part of the documented API (OperationFailed, LockBusy, ...).
+ignore = ["N818"]
 
 [tool.ruff.lint.per-file-ignores]
-# Tests: assert is fine; integration tests run fixed system binaries with fixed args.
-"tests/**" = ["S101", "S603", "S108"]
+# Tests: asserts, fixed system binaries, fake /tmp paths as payloads, seeded fuzzing.
+"tests/**" = ["S101", "S603", "S108", "S311", "PTH"]
+# core/ uses os-level calls deliberately: fd-based, O_NOFOLLOW and dir_fd
+# semantics that pathlib does not expose.
+"domainpilot/core/**" = ["PTH"]
