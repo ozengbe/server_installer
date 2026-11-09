@@ -1,0 +1,115 @@
+---
+- name: Install baseline packages
+  ansible.builtin.apt:
+    name:
+      - nftables
+      - openssh-server
+      - apparmor
+      - apparmor-utils
+      - auditd
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Gather package facts
+  ansible.builtin.package_facts:
+    manager: apt
+
+- name: Ensure time synchronisation (TLS and logs depend on it)
+  when: "'chrony' not in ansible_facts['packages']"
+  block:
+    - name: Install systemd-timesyncd
+      ansible.builtin.apt:
+        name: systemd-timesyncd
+        state: present
+    - name: Enable systemd-timesyncd
+      ansible.builtin.systemd_service:
+        name: systemd-timesyncd
+        enabled: true
+        state: started
+
+- name: Create DomainPilot directories
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: /etc/domainpilot, mode: "0750" }
+    - { path: /etc/domainpilot/firewall, mode: "0700" }
+    - { path: /var/lib/domainpilot, mode: "0700" }
+    - { path: /var/lib/domainpilot/firewall, mode: "0700" }
+    - { path: /var/log/domainpilot, mode: "0750" }
+    - { path: /usr/local/lib/domainpilot, mode: "0755" }
+
+- name: Persistent, size-capped journal
+  ansible.builtin.copy:
+    dest: /etc/systemd/journald.conf.d/90-domainpilot.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Managed by DomainPilot
+      [Journal]
+      Storage=persistent
+      Compress=yes
+      SystemMaxUse=1G
+      MaxRetentionSec=3month
+  notify: Restart journald
+
+- name: Harden /dev/shm mount options
+  ansible.builtin.lineinfile:
+    path: /etc/fstab
+    regexp: '^\S+\s+/dev/shm\s'
+    line: "tmpfs /dev/shm tmpfs defaults,nodev,nosuid,noexec 0 0"
+  notify: Remount dev shm
+  tags: [host-kernel]
+
+- name: Hardened /tmp (tmpfs, nodev,nosuid,noexec; active after next boot)
+  when: dp_harden_tmp | bool
+  tags: [host-kernel]
+  block:
+    - name: Keep debconf scripts out of noexec /tmp
+      ansible.builtin.copy:
+        dest: /etc/apt/apt.conf.d/50domainpilot-tmp
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          // Managed by DomainPilot: debconf executes extracted config scripts; /tmp is noexec.
+          APT::ExtractTemplates::TempDir "/var/tmp";
+    - name: Install tmp.mount unit
+      ansible.builtin.copy:
+        src: tmp.mount
+        dest: /etc/systemd/system/tmp.mount
+        owner: root
+        group: root
+        mode: "0644"
+      register: dp_tmp_unit
+    - name: Enable tmp.mount (not started now, to avoid hiding files of running processes)
+      ansible.builtin.systemd_service:
+        name: tmp.mount
+        enabled: true
+        daemon_reload: "{{ dp_tmp_unit is changed }}"
+    - name: Report reboot needed for /tmp hardening
+      ansible.builtin.debug:
+        msg: "/tmp hardening is configured and becomes active at the next planned reboot."
+      when: dp_tmp_unit is changed  # noqa: no-handler
+
+- name: Audit rules for privileged changes
+  ansible.builtin.copy:
+    src: 90-domainpilot.rules
+    dest: /etc/audit/rules.d/90-domainpilot.rules
+    owner: root
+    group: root
+    mode: "0640"
+  notify: Load audit rules
+  tags: [host-kernel]
+
+- name: Enable auditd
+  ansible.builtin.systemd_service:
+    name: auditd
+    enabled: true
+    state: started
+  tags: [host-kernel]

@@ -1,0 +1,112 @@
+#!/bin/bash
+# dp-firewall - apply DomainPilot nftables changes with automatic rollback.
+#
+#   dp-firewall apply FILE [--timeout SECONDS]   validate, apply, arm rollback timer
+#   dp-firewall confirm                          keep the change and persist it
+#   dp-firewall rollback                         restore the previous ruleset now
+#   dp-firewall status                           show pending state
+#
+# Only the "inet domainpilot" table is managed; other tables (e.g. fail2ban's)
+# are never touched. The change is written to /etc/nftables.conf ONLY on
+# confirm, so a reboot before confirmation also reverts it.
+set -euo pipefail
+umask 077
+export PATH=/usr/sbin:/usr/bin:/sbin:/bin LC_ALL=C
+
+STATE=/var/lib/domainpilot/firewall
+LIVE_CONF=/etc/nftables.conf
+TABLE=(inet domainpilot)
+UNIT=dp-firewall-rollback
+SELF=/usr/local/sbin/dp-firewall
+
+log() { logger -t dp-firewall -- "$*" 2>/dev/null || true; echo "dp-firewall: $*" >&2; }
+die() { log "ERROR: $*"; exit 1; }
+
+[[ $EUID -eq 0 ]] || die "must run as root"
+mkdir -p "$STATE"
+exec 9>"$STATE/.lock"
+flock -w 30 9 || die "another dp-firewall operation is running"
+
+disarm() {
+  systemctl stop "$UNIT.timer" >/dev/null 2>&1 || true
+  systemctl reset-failed "$UNIT.timer" "$UNIT.service" >/dev/null 2>&1 || true
+}
+
+snapshot_current() {
+  {
+    printf 'table %s %s\ndelete table %s %s\n' "${TABLE[@]}" "${TABLE[@]}"
+    nft list table "${TABLE[@]}" 2>/dev/null || true
+  } >"$STATE/previous.nft"
+}
+
+do_rollback() {
+  nft -f "$STATE/previous.nft" || die "rollback FAILED: inspect $STATE/previous.nft"
+  rm -f "$STATE/pending"
+  log "rolled back to previous ruleset"
+}
+
+cmd_apply() {
+  local candidate="" timeout=120
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --timeout) timeout="${2:-}"; shift 2 ;;
+      -*) die "unknown option $1" ;;
+      *) [[ -z $candidate ]] || die "only one FILE allowed"; candidate="$1"; shift ;;
+    esac
+  done
+  [[ -n $candidate && -f $candidate ]] || die "candidate file not found"
+  if ! [[ $timeout =~ ^[0-9]{1,4}$ ]] || (( timeout < 5 || timeout > 3600 )); then
+    die "timeout must be 5..3600"
+  fi
+  [[ ! -e $STATE/pending ]] || die "a change is already pending: run 'dp-firewall confirm' or 'dp-firewall rollback'"
+
+  nft -c -f "$candidate" || die "candidate failed validation; nothing changed"
+  install -m 0600 "$candidate" "$STATE/candidate.nft"
+  snapshot_current
+
+  # Arm the rollback BEFORE applying anything.
+  disarm
+  systemd-run --quiet --unit="$UNIT" --on-active="${timeout}s" \
+    --timer-property=AccuracySec=1s "$SELF" rollback >/dev/null \
+    || die "could not arm rollback timer; nothing changed"
+  date +%s >"$STATE/pending"
+
+  if ! nft -f "$STATE/candidate.nft"; then
+    disarm; do_rollback; die "apply failed; previous ruleset restored"
+  fi
+  log "applied. Rollback in ${timeout}s unless confirmed from a NEW ssh session: sudo dp-firewall confirm"
+}
+
+cmd_confirm() {
+  [[ -e $STATE/pending ]] || die "nothing pending (it may already have been rolled back)"
+  disarm
+  install -m 0644 "$STATE/candidate.nft" "$LIVE_CONF.dp-new"
+  sync -f "$LIVE_CONF.dp-new" 2>/dev/null || true
+  mv -f "$LIVE_CONF.dp-new" "$LIVE_CONF"
+  rm -f "$STATE/pending"
+  log "confirmed and persisted to $LIVE_CONF"
+}
+
+cmd_rollback() {
+  if [[ ! -e $STATE/pending ]]; then log "nothing pending"; return 0; fi
+  disarm
+  do_rollback
+}
+
+cmd_status() {
+  if [[ -e $STATE/pending ]]; then
+    local since; since=$(<"$STATE/pending")
+    echo "pending since $(date -d "@$since" -Is); rollback timer:"
+    systemctl list-timers "$UNIT.timer" --no-pager 2>/dev/null || true
+    exit 3
+  fi
+  echo "no pending change"
+}
+
+case "${1:-}" in
+  apply) shift; cmd_apply "$@" ;;
+  confirm) cmd_confirm ;;
+  rollback) cmd_rollback ;;
+  status) cmd_status ;;
+  *) sed -n '2,8p' "$0" >&2; exit 2 ;;
+esac

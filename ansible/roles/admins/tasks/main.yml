@@ -1,0 +1,64 @@
+---
+- name: DomainPilot groups
+  ansible.builtin.group:
+    name: "{{ item }}"
+    system: true
+    state: present
+  loop: [dp-admins, dp-sftp]
+
+- name: Admin accounts
+  ansible.builtin.user:
+    name: "{{ item.name }}"
+    shell: /bin/bash
+    groups: [dp-admins]
+    append: true
+    create_home: true
+  loop: "{{ dp_admins }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+# Keys live in a root-owned location so a compromised account cannot add keys.
+- name: Central authorized_keys directory
+  ansible.builtin.file:
+    path: /etc/ssh/authorized_keys.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Admin authorized keys (exclusive)
+  ansible.builtin.copy:
+    dest: "/etc/ssh/authorized_keys.d/{{ item.name }}"
+    content: "{{ item.ssh_keys | join('\n') }}\n"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ dp_admins }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Revoke keys of removed admins
+  ansible.builtin.file:
+    path: "/etc/ssh/authorized_keys.d/{{ item }}"
+    state: absent
+  loop: "{{ dp_admins_revoked }}"
+
+- name: Read dp-admins membership
+  ansible.builtin.getent:
+    database: group
+    key: dp-admins
+
+- name: Remove revoked admins from dp-admins
+  ansible.builtin.command: /usr/bin/gpasswd -d {{ item }} dp-admins
+  loop: "{{ dp_admins_revoked }}"
+  when: item in (ansible_facts['getent_group']['dp-admins'][2] | default('')).split(',')
+  changed_when: true
+
+- name: Sudo policy for dp-admins
+  ansible.builtin.template:
+    src: sudoers.j2
+    dest: /etc/sudoers.d/90-domainpilot
+    owner: root
+    group: root
+    mode: "0440"
+    validate: /usr/sbin/visudo -cf %s

@@ -1,0 +1,84 @@
+---
+# Ubuntu 24.04 uses socket-activated sshd; `sshd -t` needs the privsep dir.
+- name: Privilege separation directory exists for config tests
+  ansible.builtin.file:
+    path: /run/sshd
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Every admin has a non-empty key file before sshd is restricted
+  ansible.builtin.stat:
+    path: "/etc/ssh/authorized_keys.d/{{ item.name }}"
+  register: dp_keyfiles
+  loop: "{{ dp_admins }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Refuse to restrict sshd without admin keys
+  ansible.builtin.assert:
+    that: item.stat.exists and item.stat.size > 0
+    fail_msg: "No key file for {{ item.item.name }}; refusing to change sshd (anti-lockout)."
+    quiet: true
+  loop: "{{ dp_keyfiles.results }}"
+  loop_control:
+    label: "{{ item.item.name }}"
+
+- name: Apply sshd configuration with validation and restore on failure
+  block:
+    # Drop-in is included at the top of sshd_config; first value wins in sshd.
+    - name: Global sshd hardening drop-in
+      ansible.builtin.template:
+        src: 00-domainpilot.conf.j2
+        dest: /etc/ssh/sshd_config.d/00-domainpilot.conf
+        owner: root
+        group: root
+        mode: "0644"
+        backup: true
+      register: dp_sshd_dropin
+      notify: Reload sshd
+
+    - name: Use the in-process SFTP server (required for chroot)
+      ansible.builtin.lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: '^\s*Subsystem\s+sftp\s'
+        line: "Subsystem sftp internal-sftp"
+        validate: /usr/sbin/sshd -t -f %s
+      notify: Reload sshd
+
+    # Match blocks must be at the end of the main file: anything after a Match
+    # (including the rest of sshd_config) would otherwise become conditional.
+    - name: Group-specific rules at the end of sshd_config
+      ansible.builtin.blockinfile:
+        path: /etc/ssh/sshd_config
+        marker: "# {mark} DomainPilot managed block"
+        insertafter: EOF
+        block: "{{ lookup('ansible.builtin.template', 'match-blocks.j2') }}"
+        validate: /usr/sbin/sshd -t -f %s
+      notify: Reload sshd
+
+    - name: Validate complete sshd configuration
+      ansible.builtin.command: /usr/sbin/sshd -t
+      changed_when: false
+
+  rescue:
+    - name: Restore previous drop-in
+      ansible.builtin.copy:
+        src: "{{ dp_sshd_dropin.backup_file }}"
+        dest: /etc/ssh/sshd_config.d/00-domainpilot.conf
+        remote_src: true
+        owner: root
+        group: root
+        mode: "0644"
+      when: dp_sshd_dropin.backup_file is defined
+
+    - name: Remove new drop-in that had no predecessor
+      ansible.builtin.file:
+        path: /etc/ssh/sshd_config.d/00-domainpilot.conf
+        state: absent
+      when: dp_sshd_dropin is changed and dp_sshd_dropin.backup_file is not defined
+
+    - name: Stop after sshd validation failure
+      ansible.builtin.fail:
+        msg: "sshd configuration failed validation; previous configuration restored, sshd not reloaded."

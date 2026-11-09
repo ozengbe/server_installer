@@ -1,0 +1,78 @@
+---
+- name: Install dp-firewall helper
+  ansible.builtin.copy:
+    src: dp-firewall
+    dest: /usr/local/sbin/dp-firewall
+    owner: root
+    group: root
+    mode: "0750"
+
+# Enable for boot only. Starting it now would load the distro default
+# /etc/nftables.conf ("flush ruleset") on the first run.
+- name: Load /etc/nftables.conf at boot
+  ansible.builtin.systemd_service:
+    name: nftables
+    enabled: true
+
+- name: Render candidate ruleset (validated with nft -c)
+  ansible.builtin.template:
+    src: domainpilot.nft.j2
+    dest: /etc/domainpilot/firewall/domainpilot.nft
+    owner: root
+    group: root
+    mode: "0600"
+    validate: /usr/sbin/nft -c -f %s
+
+- name: Compare candidate with persisted ruleset
+  ansible.builtin.stat:
+    path: "{{ item }}"
+    checksum_algorithm: sha256
+  loop:
+    - /etc/domainpilot/firewall/domainpilot.nft
+    - /etc/nftables.conf
+  register: dp_fw_files
+
+- name: Check that the live table exists
+  ansible.builtin.command: /usr/sbin/nft list table inet domainpilot
+  register: dp_fw_live
+  changed_when: false
+  failed_when: false
+
+- name: Decide whether the firewall needs applying
+  ansible.builtin.set_fact:
+    dp_fw_needs_apply: >-
+      {{ dp_fw_live.rc != 0
+         or not dp_fw_files.results[1].stat.exists
+         or dp_fw_files.results[0].stat.checksum != dp_fw_files.results[1].stat.checksum }}
+
+- name: Apply firewall with automatic rollback
+  when: dp_fw_needs_apply | bool
+  block:
+    - name: Apply candidate (rollback armed)
+      ansible.builtin.command: >-
+        /usr/local/sbin/dp-firewall apply /etc/domainpilot/firewall/domainpilot.nft
+        --timeout {{ dp_firewall_confirm_timeout | int }}
+      changed_when: true
+
+    - name: Disable ufw (DomainPilot manages nftables directly)
+      ansible.builtin.command: /usr/sbin/ufw disable
+      when: "'ufw' in ansible_facts['packages'] | default({})"
+      register: dp_ufw
+      changed_when: "'disabled' in dp_ufw.stdout"
+      failed_when: false
+
+    - name: Confirm after proving a fresh SSH connection works
+      ansible.builtin.include_tasks: confirm_remote.yml
+      when: dp_firewall_confirm_mode == 'remote'
+
+    - name: Confirm immediately (test VMs only)
+      ansible.builtin.command: /usr/local/sbin/dp-firewall confirm
+      when: dp_firewall_confirm_mode == 'immediate'
+      changed_when: true
+
+    - name: Manual confirmation required
+      ansible.builtin.debug:
+        msg:
+          - "FIREWALL CHANGE PENDING - it rolls back in {{ dp_firewall_confirm_timeout }}s."
+          - "Open a NEW ssh session to this server now and run: sudo dp-firewall confirm"
+      when: dp_firewall_confirm_mode == 'manual'

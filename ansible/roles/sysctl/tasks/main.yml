@@ -1,0 +1,35 @@
+---
+# Named 99-zz-* so it sorts after every other sysctl.d file and wins.
+- name: Kernel and network hardening sysctls
+  ansible.builtin.template:
+    src: sysctl.conf.j2
+    dest: /etc/sysctl.d/99-zz-domainpilot.conf
+    owner: root
+    group: root
+    mode: "0644"
+  register: dp_sysctl_file
+  tags: [host-kernel]
+
+# Not a handler: values must be live before the verification below.
+- name: Apply sysctls now
+  ansible.builtin.command: /usr/sbin/sysctl --load /etc/sysctl.d/99-zz-domainpilot.conf
+  when: dp_sysctl_file is changed  # noqa: no-handler
+  changed_when: true
+  tags: [host-kernel]
+
+- name: Read back critical sysctls
+  ansible.builtin.command: /usr/sbin/sysctl -n {{ item.key }}
+  register: dp_sysctl_live
+  changed_when: false
+  loop: "{{ sysctl_required | dict2items }}"
+  tags: [host-kernel]
+
+- name: Verify critical sysctls are live
+  ansible.builtin.assert:
+    that: item.stdout | trim == item.item.value | string
+    fail_msg: "{{ item.item.key }} is {{ item.stdout | trim }}, expected {{ item.item.value }}"
+    quiet: true
+  loop: "{{ dp_sysctl_live.results }}"
+  loop_control:
+    label: "{{ item.item.key }}"
+  tags: [host-kernel]

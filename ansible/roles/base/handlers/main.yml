@@ -1,0 +1,14 @@
+---
+- name: Restart journald
+  ansible.builtin.systemd_service:
+    name: systemd-journald
+    state: restarted
+
+# noqa: the mount module lives in ansible.posix; we use ansible.builtin only.
+- name: Remount dev shm
+  ansible.builtin.command: /usr/bin/mount -o remount,nodev,nosuid,noexec /dev/shm  # noqa: command-instead-of-module
+  changed_when: true
+
+- name: Load audit rules
+  ansible.builtin.command: /usr/sbin/augenrules --load
+  changed_when: true

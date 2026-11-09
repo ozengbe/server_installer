@@ -1,0 +1,8 @@
+---
+# Reload never drops existing sessions. If sshd is idle under socket
+# activation, nothing runs and the next connection reads the new config.
+# noqa: systemd_service has no "reload only if running"; state=reloaded would
+# start ssh.service and fight ssh.socket.
+- name: Reload sshd
+  ansible.builtin.command: /usr/bin/systemctl try-reload-or-restart ssh.service  # noqa: command-instead-of-module
+  changed_when: true

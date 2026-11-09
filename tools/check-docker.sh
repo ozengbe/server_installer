@@ -12,6 +12,6 @@ MSYS_NO_PATHCONV=1 docker run --rm -e DEBIAN_FRONTEND=noninteractive -v "${SRC}:
   set -euo pipefail
   apt-get update -qq >/dev/null && apt-get install -y -qq shellcheck >/dev/null
   cp -a /ro /src && cd /src
-  pip install --quiet --root-user-action=ignore --disable-pip-version-check -e ".[dev]"
+  pip install --quiet --root-user-action=ignore --disable-pip-version-check -e ".[dev]" "ansible-lint==24.12.2" "ansible-core>=2.16,<2.17"
   bash tools/check.sh
 '

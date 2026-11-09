@@ -1,0 +1,13 @@
+---
+# Drop the existing (already-established) connection and open a new one through
+# the new ruleset. If this fails, the play fails and the timer rolls back.
+- name: Drop the current connection
+  ansible.builtin.meta: reset_connection
+
+- name: Open a new connection through the new ruleset
+  ansible.builtin.wait_for_connection:
+    timeout: "{{ (dp_firewall_confirm_timeout | int) // 2 }}"
+
+- name: Confirm firewall change
+  ansible.builtin.command: /usr/local/sbin/dp-firewall confirm
+  changed_when: true
