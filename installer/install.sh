@@ -48,6 +48,22 @@ confirm() {
 
 yaml_quote() { local s=${1//\'/\'\'}; printf "'%s'" "$s"; }
 
+# The client IP of the SSH session that started us. sudo clears SSH_CONNECTION,
+# so read it from the nearest ancestor process that still has it.
+operator_ip() {
+  local pid=$$ conn="" ip
+  while [[ $pid =~ ^[0-9]+$ ]] && (( pid > 1 )); do
+    conn="$(tr '\0' '\n' <"/proc/$pid/environ" 2>/dev/null | sed -n 's/^SSH_CONNECTION=//p' | head -1)"
+    [[ -n $conn ]] && break
+    pid="$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ')"
+  done
+  ip="${conn%% *}"
+  [[ -n $ip ]] || return 0
+  python3 -I -c 'import ipaddress, sys; ipaddress.ip_address(sys.argv[1])' "$ip" 2>/dev/null \
+    && printf '%s' "$ip"
+  return 0
+}
+
 generate_vars() {
   local user="${SUDO_USER:-}"
   [[ -n $user && $user != root ]] || die "no $VARS found and not run via sudo from an admin account; create $VARS (see ansible/group_vars/all.yml)"
@@ -64,8 +80,16 @@ generate_vars() {
   done < <(grep -E '^(ssh-ed25519|sk-ssh-ed25519@openssh\.com|ecdsa-sha2-nistp(256|384|521)|sk-ecdsa-sha2-nistp256@openssh\.com|ssh-rsa) [A-Za-z0-9+/]+={0,3}( .*)?$' "$keyfile" || true)
   [[ ${#keys[@]} -gt 0 ]] || die "no usable keys in $keyfile (keys with options like from= are not imported)"
 
+  local admin_ip
+  admin_ip="$(operator_ip)"
+
   info "First run: '$user' becomes the first DomainPilot admin with ${#keys[@]} key(s) from $keyfile."
   info "After hardening: SSH is key-only, root login is disabled, and only dp-admins can log in."
+  if [[ -n $admin_ip ]]; then
+    info "Your SSH source address $admin_ip will never be banned by fail2ban (dp_fail2ban_ignoreip)."
+  else
+    info "Could not detect your SSH source address; consider setting dp_fail2ban_ignoreip."
+  fi
   confirm "Continue?" || die "aborted"
 
   install -d -m 0750 "$(dirname "$VARS")"
@@ -76,6 +100,11 @@ generate_vars() {
     echo "  - name: $user"
     echo "    ssh_keys:"
     for k in "${keys[@]}"; do echo "      - $(yaml_quote "$k")"; done
+    if [[ -n $admin_ip ]]; then
+      echo "# Address the installer was run from. Remove it if it is dynamic or shared."
+      echo "dp_fail2ban_ignoreip:"
+      echo "  - $(yaml_quote "$admin_ip")"
+    fi
   } >"$VARS.tmp"
   chmod 0640 "$VARS.tmp"
   mv -f "$VARS.tmp" "$VARS"

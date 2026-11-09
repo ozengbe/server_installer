@@ -1,4 +1,33 @@
 ---
+# apport (Ubuntu's crash reporter) rewrites fs.suid_dumpable=2 and
+# kernel.core_pattern every time it starts, silently undoing hardening after
+# a reboot. Core dumps can hold other tenants' secrets, so servers don't keep them.
+- name: Gather package facts
+  ansible.builtin.package_facts:
+    manager: apt
+  tags: [host-kernel]
+
+- name: Disable apport crash collection
+  when: "'apport' in ansible_facts['packages']"
+  tags: [host-kernel]
+  block:
+    - name: Turn apport off in its defaults file
+      ansible.builtin.lineinfile:
+        path: /etc/default/apport
+        regexp: '^\s*enabled\s*='
+        line: "enabled=0"
+        create: true
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Stop and mask apport
+      ansible.builtin.systemd_service:
+        name: apport
+        state: stopped
+        enabled: false
+        masked: true
+
 # Named 99-zz-* so it sorts after every other sysctl.d file and wins.
 - name: Kernel and network hardening sysctls
   ansible.builtin.template:
@@ -10,10 +39,20 @@
   register: dp_sysctl_file
   tags: [host-kernel]
 
-# Not a handler: values must be live before the verification below.
-- name: Apply sysctls now
+- name: Read live values of critical sysctls
+  ansible.builtin.command: /usr/sbin/sysctl -n {{ item.key }}
+  register: dp_sysctl_before
+  changed_when: false
+  loop: "{{ sysctl_required | dict2items }}"
+  tags: [host-kernel]
+
+# Re-apply when the file changed OR something at runtime drifted a value.
+- name: Apply sysctls
   ansible.builtin.command: /usr/sbin/sysctl --load /etc/sysctl.d/99-zz-domainpilot.conf
-  when: dp_sysctl_file is changed  # noqa: no-handler
+  when: >-
+    dp_sysctl_file is changed
+    or (dp_sysctl_before.results | map(attribute='stdout') | map('trim') | list)
+       != (dp_sysctl_before.results | map(attribute='item.value') | map('string') | list)
   changed_when: true
   tags: [host-kernel]
 

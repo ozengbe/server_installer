@@ -9,13 +9,15 @@ bantime.increment = true
 bantime.maxtime = 1w
 findtime = 10m
 maxretry = 5
-# Admin allowlists are never banned (anti-lockout).
-ignoreip = 127.0.0.1/8 ::1{% for net in dp_ssh_allow_v4 + dp_ssh_allow_v6 %} {{ net }}{% endfor %}
+# Admin addresses and SSH allowlists are never banned (anti-lockout).
+ignoreip = 127.0.0.1/8 ::1{% for net in dp_fail2ban_ignoreip + dp_ssh_allow_v4 + dp_ssh_allow_v6 %} {{ net }}{% endfor %}
 
 
 [sshd]
 enabled = true
-mode = aggressive
+# "normal": one failed login counts once. "aggressive" also counts protocol
+# negotiation failures and banned an admin after three failed logins in testing.
+mode = normal
 
 [nginx-limit-req]
 enabled = true

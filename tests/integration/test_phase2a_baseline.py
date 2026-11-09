@@ -110,6 +110,7 @@ def test_authorized_keys_root_owned() -> None:
         ("fs.protected_symlinks", "1"),
         ("fs.protected_regular", "2"),
         ("fs.suid_dumpable", "0"),
+        ("kernel.core_pattern", "|/bin/false"),
         ("net.ipv4.conf.all.accept_redirects", "0"),
         ("net.ipv6.conf.all.accept_redirects", "0"),
     ],
@@ -198,3 +199,8 @@ def test_firewall_confirm_persists_then_restore(tmp_path: Path) -> None:
     run(DPFW, "confirm")
     assert Path("/etc/nftables.conf").read_bytes() == original
     assert "dp_test_marker" not in live_table()
+
+
+def test_apport_cannot_reset_hardening() -> None:
+    state = run("/usr/bin/systemctl", "is-enabled", "apport.service", check=False).stdout.strip()
+    assert state in ("masked", "not-found", ""), state

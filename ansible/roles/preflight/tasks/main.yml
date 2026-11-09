@@ -83,3 +83,9 @@
     fail_msg: >-
       A firewall change is waiting for confirmation. From a NEW ssh session run
       `sudo dp-firewall confirm` (or `sudo dp-firewall rollback`), then re-run.
+
+- name: Validate fail2ban ignore list (IP or CIDR only; no injection into jail config)
+  ansible.builtin.assert:
+    that:
+      - dp_fail2ban_ignoreip | select('match', '^[0-9A-Fa-f:.]{2,39}(/[0-9]{1,3})?\Z') | list | length == dp_fail2ban_ignoreip | length
+    fail_msg: "dp_fail2ban_ignoreip entries must be IP addresses or CIDR ranges."

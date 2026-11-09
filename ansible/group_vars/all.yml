@@ -48,6 +48,10 @@ dp_rp_filter: 1
 # /tmp as tmpfs with nodev,nosuid,noexec (takes effect at next boot).
 dp_harden_tmp: true
 
+# Addresses (IPs or CIDRs) fail2ban never bans. The installer adds the IP
+# you ran it from on first run; remove it if your IP is dynamic or shared.
+dp_fail2ban_ignoreip: []
+
 # --- Services (Phase 2b). Sizes are conservative; Phase 7 tunes them. ---
 dp_nginx_http3: false
 dp_nginx_worker_connections: 4096

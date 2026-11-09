@@ -67,3 +67,15 @@ Health check: `sudo dp-healthcheck` (or `--json`). It runs automatically after e
 **Updates that are deliberately not automatic:** nginx.org releases, PHP minor/major versions, MariaDB major versions, and kernel reboots. Run them in a maintenance window (`site system update`, Phase 7). MariaDB is never restarted by needrestart.
 
 **Rollback:** every service config change is validated (`nginx -t`, `fail2ban-client --test`, MariaDB start) and the previous file is restored if validation fails. To remove a service's DomainPilot config by hand, delete the file named in its "Managed by DomainPilot" header and restart the service.
+
+## Locked out by fail2ban
+
+Repeated failed SSH logins get the source IP banned for 1 h (longer for repeat offenders), on SSH only. Websites stay reachable. The installer exempts the IP it was run from (`dp_fail2ban_ignoreip` in `/etc/domainpilot/install.yml`); add any other admin addresses there and re-run the installer.
+
+If you are banned, connect from another address or the provider console and run:
+
+```bash
+sudo fail2ban-client status sshd                   # list banned IPs
+sudo fail2ban-client set sshd unbanip <your-ip>
+sudo fail2ban-client set recidive unbanip <your-ip> # if banned repeatedly
+```
