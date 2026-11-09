@@ -11,20 +11,21 @@ jobs:
   checks:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - run: sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
       - run: pip install -e ".[dev]" "ansible-lint==24.12.2" "ansible-core>=2.16,<2.17"
-      - run: bash tools/check.sh
+      - run: bash tools/ci/step.sh "checks" plain -- bash tools/check.sh
 
   integration:
     # GitHub-hosted runners are disposable Ubuntu 24.04 VMs with systemd and sudo.
+    # Failures are summarised as annotations on the run page (tools/ci/step.sh).
     needs: checks
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Prepare disposable test host
         run: |
           echo "GitHub Actions runner (disposable)" | sudo tee /etc/domainpilot-test-vm
@@ -39,13 +40,30 @@ jobs:
           sudo apt-get update -qq
           mkdir -p ~/.ssh && ssh-keygen -q -t ed25519 -N '' -f ~/.ssh/id_ed25519
           cat ~/.ssh/id_ed25519.pub >> ~/.ssh/authorized_keys
+
       - name: Install (first run)
-        run: sudo installer/install.sh --yes -- -e dp_firewall_confirm_mode=immediate
+        id: install
+        run: >-
+          tools/ci/step.sh "install: first run" install --
+          sudo installer/install.sh --yes -- -e dp_firewall_confirm_mode=immediate
+
+      # The steps below still run if an earlier one fails, as long as the
+      # install itself succeeded, so one run reports every problem at once.
       - name: Install (second run must change nothing)
-        run: |
-          sudo installer/install.sh --yes -- -e dp_firewall_confirm_mode=immediate | tee second-run.log
-          grep -Eq 'localhost +: ok=[0-9]+ +changed=0 +unreachable=0 +failed=0' second-run.log
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: >-
+          tools/ci/step.sh "install: second run not idempotent" idempotent --
+          sudo installer/install.sh --yes -- -e dp_firewall_confirm_mode=immediate
+
       - name: Integration tests
-        run: sudo python3 -m pytest -p no:cacheprovider -m integration -v tests/integration
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: >-
+          tools/ci/step.sh "integration tests" pytest --
+          sudo python3 -m pytest -p no:cacheprovider -m integration -v -rf --tb=short tests/integration
+
       - name: SSH login still works for the admin (key-only)
-        run: ssh -o StrictHostKeyChecking=accept-new -o BatchMode=yes -i ~/.ssh/id_ed25519 "$USER@127.0.0.1" true
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: >-
+          tools/ci/step.sh "admin SSH login" plain --
+          ssh -o StrictHostKeyChecking=accept-new -o BatchMode=yes -i ~/.ssh/id_ed25519
+          "$USER@127.0.0.1" true
