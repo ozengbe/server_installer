@@ -70,6 +70,8 @@ class CredentialStore:
         path = self.path(label)
         if not path.exists():
             raise OperationFailed(f"no Cloudflare credential named {label!r}")
+        if path.stat().st_mode & 0o077:  # self-heal: only root may read even ciphertext
+            path.chmod(0o600)
         token = self.run(
             [SYSTEMD_CREDS, "decrypt", f"--name=cloudflare-{label}", str(path), "-"], timeout=30
         ).stdout

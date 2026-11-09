@@ -21,6 +21,9 @@ All suites run on a disposable Ubuntu 26.04 host (`/etc/domainpilot-test-vm`). C
 
 | Found by | Issue | Fix |
 |---|---|---|
+| Phase 9 host audit (real server) | The Cloudflare token file was 0644. Its contents are encrypted with the host key, so the token was not exposed, but even ciphertext should be root-only | Installer enforces 0600 on every secret. The secret stores tighten the mode on every read |
+| Phase 9 server run | The isolation test read NoNewPrivs, seccomp, capabilities and AppArmor from inside PHP, where open_basedir (on in production) hides them: false criticals | Read from the site's running PHP processes on the host side (cannot be influenced by the confined code) |
+| Phase 9 server run | The database-grant check rejected a correct grant: `--batch` output escapes the backslash in `t0001_%` | Accept the escaped form |
 | Phase 9 unit tests | The TLS-protocol check matched `TLSv1` inside `TLSv1.2`, a false critical | Token-exact parsing of `ssl_protocols` |
 | Phase 9 review | The audit log was documented as `chattr +a`, but the installer never set it (TH19) | Installer sets and verifies the flag. The audit reports `AUDIT-APPEND-ONLY` |
 | Phase 9 design | A probe on a live site must not be written by root into a tenant directory, or be reachable from the web | Written as the site's own owner (`setpriv`), random dot-name (nginx returns 404 for dot-files), called over the FastCGI socket, then deleted |

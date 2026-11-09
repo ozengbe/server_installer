@@ -188,40 +188,53 @@ def test_alert_url_must_be_https(sites: dict[str, str]) -> None:
 
 
 def test_tenant_symlinks_never_redirect_root(sites: dict[str, str]) -> None:
-    """TH8: plant symlinks, then make root back up, restore and erase the site."""
+    """TH8: plant symlinks, then make root back up, restore and erase the site.
+
+    The bait is a root-only file outside the tenant tree (not /etc/shadow: purging
+    a site legitimately rewrites /etc/shadow when its users are deleted).
+    """
     t, other = sites[A], sites[B]
     deploy = f"{t}-deploy"
-    shadow, victim = sha("/etc/shadow"), Path(f"/srv/tenants/{other}/app/public/index.php")
+    bait = Path(f"/root/dp-p9-bait-{secrets.token_hex(4)}")
+    bait.write_text(secrets.token_hex(32))
+    bait.chmod(0o600)
+    bait_hash = sha(str(bait))
+    victim = Path(f"/srv/tenants/{other}/app/public/index.php")
     victim_hash = sha(str(victim))
     data, public = f"/srv/tenants/{t}/data", f"/srv/tenants/{t}/app/public"
-    for link, target in (
-        (f"{data}/shadow", "/etc/shadow"),
-        (f"{data}/etc", "/etc"),
-        (f"{public}/neighbour", f"/srv/tenants/{other}/app/public"),
-        (f"{public}/index.php.bak", str(victim)),
-    ):
-        user = t if link.startswith(data) else deploy
-        r = as_user(user, t, "/usr/bin/ln", "-s", target, link)
-        assert r.returncode == 0, r.stderr
+    try:
+        for link, target in (
+            (f"{data}/bait", str(bait)),
+            (f"{data}/etc", "/etc"),
+            (f"{public}/neighbour", f"/srv/tenants/{other}/app/public"),
+            (f"{public}/index.php.bak", str(victim)),
+        ):
+            user = t if link.startswith(data) else deploy
+            r = as_user(user, t, "/usr/bin/ln", "-s", target, link)
+            assert r.returncode == 0, r.stderr
 
-    report = site_json(A, "security", codes=(0, 10))
-    outside = next(f for f in report["findings"] if f["id"] == "FILES-SYMLINKS-OUT")
-    assert outside["severity"] == "warn" and "shadow" in outside["detail"]
+        report = site_json(A, "security", codes=(0, 10))
+        outside = next(f for f in report["findings"] if f["id"] == "FILES-SYMLINKS-OUT")
+        assert outside["severity"] == "warn" and bait.name in outside["detail"]
 
-    site_json("system", "backup", "setup", "--repository", str(REPO))
-    site_json(A, "backup")
-    staged = site_json(A, "restore", "--files", "--to-staging", "--confirm", A)
-    copy = Path(staged["files"]["path"]) / "data" / "shadow"
-    assert copy.is_symlink() and copy.readlink() == Path("/etc/shadow")  # stored as a link
-    site_json(A, "restore", "--files", "--confirm", A)
-    assert Path(f"{data}/shadow").is_symlink()
-    assert sha("/etc/shadow") == shadow and sha(str(victim)) == victim_hash
+        site_json("system", "backup", "setup", "--repository", str(REPO))
+        site_json(A, "backup")
+        staged = site_json(A, "restore", "--files", "--to-staging", "--confirm", A)
+        copy = Path(staged["files"]["path"]) / "data" / "bait"
+        assert copy.is_symlink() and copy.readlink() == bait  # stored as a link, not content
+        site_json(A, "restore", "--files", "--confirm", A)
+        assert Path(f"{data}/bait").is_symlink()
+        assert sha(str(bait)) == bait_hash and sha(str(victim)) == victim_hash
 
-    site_json(A, "delete", "--purge", "--confirm", A)
-    assert sha("/etc/shadow") == shadow and Path("/etc/passwd").exists()
-    assert victim.exists() and sha(str(victim)) == victim_hash  # B untouched
-    assert site_json(B, "status")["tenant"]["status"] == "active"
-    sites[A] = site_json(A, "create")["tenant"]  # fresh A for the remaining tests
+        site_json(A, "delete", "--purge", "--confirm", A)
+        assert bait.exists() and sha(str(bait)) == bait_hash  # erase never followed the link
+        assert Path("/etc/passwd").exists() and Path("/etc/hostname").exists()
+        assert victim.exists() and sha(str(victim)) == victim_hash  # B untouched
+        assert site_json(B, "status")["tenant"]["status"] == "active"
+    finally:
+        bait.unlink(missing_ok=True)
+        if site("--json", A, "status").returncode != 0:
+            sites[A] = site_json(A, "create")["tenant"]  # fresh A for the remaining tests
 
 
 def test_setuid_uploads_are_flagged_and_stripped_on_restore(sites: dict[str, str]) -> None:

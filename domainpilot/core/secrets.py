@@ -56,6 +56,8 @@ class SecretStore:
         path = self._path(name)
         if not path.exists():
             raise OperationFailed(f"secret {self.area}/{name} is not configured")
+        if path.stat().st_mode & 0o077:  # self-heal: only root may read even ciphertext
+            path.chmod(0o600)
         value = self.run(
             [SYSTEMD_CREDS, "decrypt", f"--name={self.area}-{name}", str(path), "-"], timeout=30
         ).stdout

@@ -253,8 +253,10 @@ class SiteAuditor:
             return
         if not out.ok:
             return  # no database user (static/proxy site)
+        # `t0001\_%` (one backslash; --batch output may show it escaped as two).
         allowed = re.compile(
-            rf"GRANT (?:USAGE ON \*\.\*|.+ ON `{t}\\_%`\.\*) TO [`']{t}[`']@[`']localhost[`'].*"
+            rf"GRANT (?:USAGE ON \*\.\*|.+ ON `{t}\\{{1,2}}_%`\.\*) "
+            rf"TO [`']{t}[`']@[`']localhost[`'].*"
         )
         extra = [ln for ln in out.stdout.splitlines() if ln.strip() and not allowed.fullmatch(ln)]
         rep.add(

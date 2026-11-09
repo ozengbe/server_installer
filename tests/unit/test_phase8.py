@@ -1060,3 +1060,12 @@ def test_system_logs(system: dict[str, Any], monkeypatch: pytest.MonkeyPatch) ->
     monkeypatch.setattr(proc, "run", run)
     journal = monitor_handlers.system_logs(ctx, _ns(audit=False, lines=5000, errors=True))
     assert journal.text == ["line1", "line2"] and "2000" in seen[0] and "warning" in seen[0]
+
+
+def test_secret_files_are_tightened_on_load(tmp_path: Path) -> None:
+    store = SecretStore(tmp_path / "secrets" / "x", "x", run=creds_runner())
+    store.save("k", "value")
+    cred = tmp_path / "secrets" / "x" / "k.cred"
+    cred.chmod(0o644)  # e.g. written by an older version
+    assert store.load("k") == "value"
+    assert stat.S_IMODE(cred.stat().st_mode) == 0o600

@@ -695,3 +695,42 @@ def test_security_handlers(system: dict[str, Any], monkeypatch: pytest.MonkeyPat
 def test_scan_mode_bits_helper() -> None:
     assert ha._too_open(0o755, 0o750) and not ha._too_open(0o640, 0o750)
     assert stat.S_IMODE(0o104755) == 0o4755
+
+
+# --- regressions from the first real-host run ------------------------------------------------
+
+
+def test_worker_identity_read_from_host_side(tmp_path: Path) -> None:
+    """Inside PHP, open_basedir hides /proc/self; root reads the workers' /proc instead."""
+    cg = tmp_path / "cg" / "dptenants.slice" / "dptenants-t0001.slice" / "dp-php@t0001.service"
+    cg.mkdir(parents=True)
+    (cg / "cgroup.procs").write_text("101\n102\n103\n")
+    for pid, nnp in (("101", "1"), ("102", "1")):  # 103 exited meanwhile
+        d = tmp_path / "proc" / pid / "attr"
+        d.mkdir(parents=True)
+        (d.parent / "status").write_text(
+            f"Name:\tphp-fpm8.5\nNoNewPrivs:\t{nnp}\nSeccomp:\t2\nCapEff:\t0000000000000000\n"
+        )
+        (d / "current").write_text("domainpilot-tenant-t0001//&unconfined (enforce)\x00\n")
+    tester = IsolationTester(
+        Paths.under(tmp_path), cgroup_root=tmp_path / "cg", proc_root=tmp_path / "proc"
+    )
+    ident = tester.worker_identity("t0001")
+    assert ident["no_new_privs"] and ident["seccomp_filter"] and ident["cap_eff_zero"]
+    assert ident["apparmor_label"] == "domainpilot-tenant-t0001//&unconfined (enforce)"
+    merged = dict(GOOD_PROBE, no_new_privs=False, apparmor_label="") | ident
+    assert evaluate(merged, tenant="t0001", uid=20001, writable_code=False).worst == "info"
+    (tmp_path / "proc" / "102" / "status").write_text("NoNewPrivs:\t0\nSeccomp:\t0\nCapEff:\t1\n")
+    (tmp_path / "proc" / "102" / "attr" / "current").write_text("unconfined\n")
+    weak = tester.worker_identity("t0001")
+    assert not weak["no_new_privs"] and not weak["cap_eff_zero"] and "/" in weak["apparmor_label"]
+    assert tester.worker_identity("t0002") == {}  # not running: nothing to report
+
+
+def test_grants_escaped_by_batch_output(site_tree: dict[str, Any]) -> None:
+    site_tree["state"]["grants"] = (
+        "GRANT USAGE ON *.* TO `t0001`@`localhost` IDENTIFIED VIA unix_socket\n"
+        "GRANT ALL PRIVILEGES ON `t0001\\_%`.* TO `t0001`@`localhost`\n"  # as --batch prints
+    )
+    rep = site_tree["auditor"].isolation_audit(site_tree["facts"])
+    assert next(f for f in rep.findings if f.id == "DB-GRANTS").severity == "ok"

@@ -41,3 +41,22 @@
   ansible.builtin.debug:
     msg: "Cloudflare IP ranges unavailable; nginx will log Cloudflare's IPs instead of visitors'."
   when: dp_cloudflare_v4 | length < 8
+
+# Encrypted secrets (Cloudflare tokens, backup keys, alert URLs) are root-only
+# files, even though their content is encrypted with this host's key.
+- name: Find stored secrets
+  ansible.builtin.find:
+    paths: /etc/domainpilot/secrets
+    patterns: "*.cred"
+    recurse: true
+  register: cloudflare_secret_files
+
+- name: Secrets are root-only
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    owner: root
+    group: root
+    mode: "0600"
+  loop: "{{ cloudflare_secret_files.files }}"
+  loop_control:
+    label: "{{ item.path }}"

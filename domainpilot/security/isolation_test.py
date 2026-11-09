@@ -191,11 +191,60 @@ class IsolationTester:
         run: Runner = proc.run,
         request: Requester = fcgi.request,
         probe_source: Path = PROBE,
+        cgroup_root: Path = Path("/sys/fs/cgroup"),
+        proc_root: Path = Path("/proc"),
     ) -> None:
         self.paths = paths
         self.run = run
         self.request = request
         self.probe_source = probe_source
+        self.cgroup_root = cgroup_root
+        self.proc_root = proc_root
+
+    def worker_identity(self, tenant: str) -> dict[str, Any]:
+        """Confinement of the site's running PHP processes, read by root from /proc.
+
+        Inside PHP these facts can be hidden by open_basedir (as they should be on a
+        production site), so they are taken from the host side instead: more
+        trustworthy anyway, since the confined code cannot influence them.
+        """
+        procs = (
+            self.cgroup_root
+            / "dptenants.slice"
+            / f"dptenants-{tenant}.slice"
+            / f"dp-php@{tenant}.service"
+            / "cgroup.procs"
+        )
+        try:
+            pids = [p for p in procs.read_text(encoding="ascii").split() if p.isdigit()]
+        except OSError:
+            return {}
+        nnp, seccomp, nocaps, labels = [], [], [], set()
+        for pid in pids:
+            base = self.proc_root / pid
+            try:
+                status = (base / "status").read_text(encoding="ascii")
+                label = (base / "attr" / "current").read_text(encoding="utf-8")
+                label = label.replace("\x00", "").strip()
+            except OSError:
+                continue  # exited meanwhile
+            fields = dict(
+                (k.strip(), v.strip())
+                for k, _, v in (ln.partition(":") for ln in status.splitlines())
+            )
+            nnp.append(fields.get("NoNewPrivs") == "1")
+            seccomp.append(fields.get("Seccomp") == "2")
+            nocaps.append(set(fields.get("CapEff", "1")) == {"0"})
+            labels.add(label)
+        if not nnp:
+            return {}
+        return {
+            "no_new_privs": all(nnp),
+            "seccomp_filter": all(seccomp),
+            "cap_eff_zero": all(nocaps),
+            "apparmor_label": labels.pop() if len(labels) == 1 else " / ".join(sorted(labels)),
+            "identity_source": f"host /proc of {len(nnp)} PHP process(es)",
+        }
 
     def _as_owner(self, owner: tuple[int, int], *argv: str, stdin: str | None = None) -> None:
         uid, gid = owner
@@ -236,4 +285,5 @@ class IsolationTester:
             data: dict[str, Any] = json.loads(resp.body)
         except ValueError:
             raise OperationFailed("the probe returned no usable result") from None
+        data.update(self.worker_identity(tenant))
         return data
