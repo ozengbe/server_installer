@@ -8,8 +8,10 @@ On failure, completed steps are undone in reverse order.
 
 from __future__ import annotations
 
+import os
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, NoReturn
 
 from domainpilot.core.audit import AuditLog, actor
@@ -96,6 +98,7 @@ class Transaction:
             done.append(index)
             self.registry.update_operation(op_id, steps=journal)
             self.reporter(step.description, "done")
+            _crash_hook(step.name)
 
         self.registry.update_operation(op_id, steps=journal, status="succeeded")
         self.audit.record(
@@ -152,3 +155,17 @@ class Transaction:
         if isinstance(cause, DPError):
             raise cause
         raise OperationFailed(f"{message}; all completed steps were rolled back") from cause
+
+
+TEST_VM_MARKER = Path("/etc/domainpilot-test-vm")
+
+
+def _crash_hook(step_name: str) -> None:
+    """Crash-injection for recovery tests: hard-exit right after a named step.
+
+    Active only on disposable test hosts (marker file present) and only when
+    DP_TEST_CRASH_AFTER_STEP names this step. Simulates power loss / kill -9:
+    no rollback, no cleanup, journal left as "running".
+    """
+    if os.environ.get("DP_TEST_CRASH_AFTER_STEP") == step_name and TEST_VM_MARKER.exists():
+        os._exit(137)

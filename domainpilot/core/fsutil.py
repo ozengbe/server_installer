@@ -151,3 +151,29 @@ def ensure_dir(
             )
         os.chmod(path, mode)  # just created by us and verified not a symlink
     return created
+
+
+def create_exclusive(
+    path: Path,
+    data: str | bytes,
+    *,
+    mode: int = 0o640,
+    uid: int | None = None,
+    gid: int | None = None,
+) -> None:
+    """Create a NEW file, safe even inside a directory someone else controls.
+
+    O_CREAT|O_EXCL fails if anything (including a symlink) already exists at
+    the path, and O_NOFOLLOW refuses symlinks, so a pre-planted link can never
+    redirect the write. Ownership is changed on the open descriptor.
+    """
+    payload = data.encode("utf-8") if isinstance(data, str) else data
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
+    try:
+        os.write(fd, payload)
+        if uid is not None or gid is not None:
+            os.fchown(fd, -1 if uid is None else uid, -1 if gid is None else gid)
+        os.fchmod(fd, mode)
+        os.fsync(fd)
+    finally:
+        os.close(fd)

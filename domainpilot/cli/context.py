@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from domainpilot.core.audit import AuditLog
-from domainpilot.core.config import Config
+from domainpilot.core.config import Config, HostFacts, load_host
 from domainpilot.core.output import Output
 from domainpilot.core.paths import Paths
 from domainpilot.core.registry import Registry
@@ -42,6 +42,10 @@ class Context:
                 self.paths.create_runtime_dirs()
             self._registry = Registry.open(self.paths.registry, create=create)
         return self._registry
+
+    def host(self) -> HostFacts:
+        """Facts the installer recorded about this host (PHP versions, cache engine)."""
+        return load_host(self.paths.host_config_file)
 
     def audit(self) -> AuditLog:
         self.paths.create_runtime_dirs()

@@ -67,6 +67,16 @@ class Provisioner:
 
         return action
 
+    def _delete_group(self, name: str) -> Callable[[], None]:
+        def action() -> None:
+            try:
+                grp.getgrnam(name)
+            except KeyError:
+                return
+            self.run(["/usr/sbin/groupdel", name])
+
+        return action
+
     def _sql(self, sql: str) -> Callable[[], None]:
         def action() -> None:
             db.execute(sql, self.run)
@@ -86,8 +96,9 @@ class Provisioner:
             DirSpec(etc, 0o750, "root"),
             DirSpec(etc / "secrets", 0o750, "root"),
             DirSpec(self.paths.tenant_log(t), 0o750, "tenant"),
-            DirSpec(self.paths.systemd / f"dp-php@{t}.service.d", 0o755, "root"),
         ]
+        if spec.php:
+            dirs.append(DirSpec(self.paths.systemd / f"dp-php@{t}.service.d", 0o755, "root"))
         if spec.cache:
             dirs += [
                 DirSpec(self.paths.tenant_cache_data(t), 0o700, "tenant"),
@@ -116,7 +127,9 @@ class Provisioner:
 
     def create_steps(self, spec: TenantSpec, *, db_password: str) -> list[Step]:
         t = spec.tenant
-        units = ([f"dp-cache@{t}.service"] if spec.cache else []) + [f"dp-php@{t}.service"]
+        units = ([f"dp-cache@{t}.service"] if spec.cache else []) + (
+            [f"dp-php@{t}.service"] if spec.php else []
+        )
         files = render(spec, self.paths, self.host)
         profile = self.paths.apparmor / f"tenant-{t}"
         created_dirs: list[Path] = []
@@ -185,7 +198,7 @@ class Provisioner:
             self.run([SYSTEMCTL, "daemon-reload"])
 
         def wait_for_sockets() -> None:
-            wanted = [self.paths.php_socket(t)]
+            wanted = [self.paths.php_socket(t)] if spec.php else []
             if spec.cache:
                 wanted.append(self.paths.cache_socket(t))
             deadline = time.monotonic() + self.socket_timeout
@@ -205,7 +218,9 @@ class Provisioner:
                 "group",
                 f"create group {t} (gid {spec.uid})",
                 self._cmd("/usr/sbin/groupadd", "--gid", str(spec.uid), t),
-                self._cmd("/usr/sbin/groupdel", t),
+                # userdel already removes a same-named primary group; only
+                # delete the group if it is still there.
+                self._delete_group(t),
             ),
             Step(
                 "runtime-user",
@@ -270,9 +285,9 @@ class Provisioner:
             Step("systemd-reload", "reload systemd units", self._cmd(SYSTEMCTL, "daemon-reload")),
             Step(
                 "start",
-                f"start {', '.join(units)}",
-                self._cmd(SYSTEMCTL, "enable", "--now", *units),
-                self._cmd(SYSTEMCTL, "disable", "--now", *units),
+                f"start {', '.join(units)}" if units else "no runtime services to start",
+                self._cmd(SYSTEMCTL, "enable", "--now", *units) if units else _noop,
+                self._cmd(SYSTEMCTL, "disable", "--now", *units) if units else None,
             ),
             Step("verify", f"wait for {t}'s sockets", wait_for_sockets),
         ]
@@ -391,3 +406,7 @@ def provision_tenant(
     if not dry_run:
         registry.set_tenant_status(tenant.id, "active")
     return tenant
+
+
+def _noop() -> None:
+    """Placeholder action for steps that have nothing to do in this configuration."""

@@ -91,3 +91,12 @@ def user_exists(tenant: str, run: Runner = proc.run) -> bool:
         f"SELECT COUNT(*) FROM mysql.user WHERE User='{t}' AND Host='localhost';\n", run
     )
     return result.stdout.strip() == "1"
+
+
+def alter_password_sql(tenant: str, password: str) -> str:
+    t = validate.tenant_id(tenant)
+    pw = _check_password(password)
+    return (
+        f"ALTER USER '{t}'@'localhost' "
+        f"IDENTIFIED VIA unix_socket OR mysql_native_password USING PASSWORD('{pw}');\n"
+    )

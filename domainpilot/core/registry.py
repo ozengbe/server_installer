@@ -279,6 +279,32 @@ class Registry:
         sites = [self.get_site(r["domain"]) for r in rows]
         return [s for s in sites if s is not None]
 
+    def remove_site(self, domain: str) -> None:
+        with self._tx() as conn:
+            conn.execute("DELETE FROM sites WHERE domain = ?", (domain,))
+
+    def set_site_enabled(self, domain: str, enabled: bool) -> None:
+        with self._tx() as conn:
+            cur = conn.execute(
+                "UPDATE sites SET enabled = ? WHERE domain = ?", (int(enabled), domain)
+            )
+            if cur.rowcount != 1:
+                raise OperationFailed(f"site {domain} not found")
+
+    def sites_for_tenant(self, tenant_id: str) -> list[Site]:
+        return [s for s in self.list_sites() if s.tenant_id == tenant_id]
+
+    def tenants_for_domain(self, domain: str, *, statuses: tuple[str, ...]) -> list[Tenant]:
+        """Tenants whose settings name this domain (used to find half-built sites)."""
+        found = []
+        for tenant in self.list_tenants():
+            if (
+                tenant.status in statuses
+                and self.get_tenant_settings(tenant.id).get("domain") == domain
+            ):
+                found.append(tenant)
+        return found
+
     def counts(self) -> dict[str, int]:
         tenants = self._conn.execute(
             "SELECT COUNT(*) FROM tenants WHERE status NOT IN ('archived', 'purged')"

@@ -62,7 +62,9 @@ def test_scope_help_lists_commands_and_phases(run_cli: RunCli) -> None:
 
 def test_command_help(run_cli: RunCli) -> None:
     r = run_cli("example.com", "create", "--help")
-    assert r.code == 0 and "--type" in r.out and "Planned for Phase 5" in r.out
+    assert r.code == 0 and "--type" in r.out and "Planned" not in r.out
+    r = run_cli("example.com", "ssl", "renew", "--help")
+    assert r.code == 0 and "Planned for Phase 6" in r.out
     r = run_cli("system", "status", "--help")
     assert r.code == 0 and "Planned" not in r.out
 

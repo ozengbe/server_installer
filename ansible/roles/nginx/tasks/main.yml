@@ -83,6 +83,38 @@
     - /etc/nginx/domainpilot/sites
     - /etc/nginx/domainpilot/default-tls
 
+# Per-tenant access/error logs. Root-owned on purpose (never tenant-owned): the
+# nginx master runs as root and opens these files.
+- name: Site log root
+  ansible.builtin.file:
+    path: /var/log/nginx/domainpilot
+    state: directory
+    owner: root
+    group: adm
+    mode: "0750"
+
+- name: Rotate site logs
+  ansible.builtin.copy:
+    dest: /etc/logrotate.d/domainpilot-nginx
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Managed by DomainPilot
+      /var/log/nginx/domainpilot/*/*.log {
+          daily
+          rotate 14
+          missingok
+          notifempty
+          compress
+          delaycompress
+          create 0640 root adm
+          sharedscripts
+          postrotate
+              [ -s /run/nginx.pid ] && kill -USR1 "$(cat /run/nginx.pid)" || true
+          endscript
+      }
+
 - name: Self-signed placeholder cert for the default server (never presented; handshake rejected)
   ansible.builtin.command: >-
     /usr/bin/openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes

@@ -1,0 +1,15 @@
+# Managed by DomainPilot: ${domain} (tenant ${tenant}) is DISABLED. `site ${domain} enable` restores it.
+server {
+    listen 80;
+    listen [::]:80;
+    server_name ${server_names};
+
+    access_log ${log_dir}/access.log dp_json;
+    error_log ${log_dir}/error.log warn;
+
+    location / {
+        default_type text/plain;
+        add_header Retry-After 3600 always;
+        return 503 "This site is temporarily unavailable.\n";
+    }
+}

@@ -44,6 +44,8 @@ class TenantSpec:
     cache: bool = True
     # Tests switch this off so probes exercise the real sandbox, not PHP's check.
     php_open_basedir: bool = True
+    # Static and proxy sites have no PHP runtime at all.
+    php: bool = True
 
     def __post_init__(self) -> None:
         validate.tenant_id(self.tenant)
@@ -117,14 +119,20 @@ def render(spec: TenantSpec, paths: Paths, host: HostFacts) -> list[RenderedFile
     v = _values(spec, paths, host)
     t = spec.tenant
     etc = paths.tenant_etc(t)
-    files = [
-        RenderedFile(etc / "php-fpm.conf", _load("php-fpm.conf.tmpl").substitute(v), 0o640, True),
-        RenderedFile(
-            paths.systemd / f"dp-php@{t}.service.d" / "10-tenant.conf",
-            _load("php-dropin.conf.tmpl").substitute(v),
-            0o644,
-            False,
-        ),
+    files: list[RenderedFile] = []
+    if spec.php:
+        files += [
+            RenderedFile(
+                etc / "php-fpm.conf", _load("php-fpm.conf.tmpl").substitute(v), 0o640, True
+            ),
+            RenderedFile(
+                paths.systemd / f"dp-php@{t}.service.d" / "10-tenant.conf",
+                _load("php-dropin.conf.tmpl").substitute(v),
+                0o644,
+                False,
+            ),
+        ]
+    files += [
         RenderedFile(
             paths.systemd / spec.slice, _load("tenant.slice.tmpl").substitute(v), 0o644, False
         ),

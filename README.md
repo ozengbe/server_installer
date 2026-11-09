@@ -26,9 +26,20 @@ Integration tests refuse to run on any host without the `/etc/domainpilot-test-v
 
 Priorities: Security → Isolation → Reliability → Maintainability → Performance → Ease of use.
 
-## The `site` CLI (Phase 3 foundation)
+## The `site` CLI
 
-Implemented so far: `site list`, `site <domain> status`, `site system status`, `site help` and `site version`, plus `--json`, `--dry-run`, `--confirm` and `--help` everywhere. Every other command in [docs/cli-spec.md](docs/cli-spec.md) is already registered. Running one says which phase adds it.
+Available now (Phases 3–5):
+
+```bash
+sudo site example.com create [--type php|static|proxy] [--alias www.example.com] [--upstream https://host]
+sudo site example.com status | disable | enable | repair | logs [--error|--php] [--lines N]
+sudo site example.com delete [--purge] --confirm example.com   # without --purge: archived, data kept
+sudo site example.com db create [--name app] | db status | db credentials [--rotate]
+sudo site example.com php status | php restart | isolation status
+sudo site list | system status | system firewall status|confirm|rollback
+```
+
+Every command takes `--json`, `--dry-run` (mutating commands) and `--help`. Sites are HTTP-only until AutoSSL (Phase 6). Commands from later phases are registered and say which phase adds them.
 
 Layout on a server: the package lives in `/usr/lib/domainpilot/domainpilot/` and the wrapper at `/usr/local/bin/site` ([bin/site](bin/site)), which runs Python in isolated mode (`-I`). The runtime uses only the standard library. Core modules are in [domainpilot/core/](domainpilot/core/):
 

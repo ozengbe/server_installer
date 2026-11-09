@@ -12,7 +12,7 @@ import argparse
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from domainpilot.cli import handlers, tenant_handlers
+from domainpilot.cli import handlers, site_handlers, tenant_handlers
 from domainpilot.cli.context import Handler
 
 Configure = Callable[[argparse.ArgumentParser], None]
@@ -78,6 +78,27 @@ def _update_args(p: argparse.ArgumentParser) -> None:
     group.add_argument("--security", action="store_true")
 
 
+def _logs_args(p: argparse.ArgumentParser) -> None:
+    group = p.add_mutually_exclusive_group()
+    group.add_argument("--access", dest="kind", action="store_const", const="access")
+    group.add_argument("--error", dest="kind", action="store_const", const="error")
+    group.add_argument("--php", dest="kind", action="store_const", const="php")
+    p.add_argument("--lines", type=int, default=50)
+
+
+def _db_create_args(p: argparse.ArgumentParser) -> None:
+    p.add_argument("--name", default="app", help="database name suffix (default: app)")
+
+
+def _db_credentials_args(p: argparse.ArgumentParser) -> None:
+    p.add_argument("--rotate", action="store_true", help="generate a new password")
+    p.add_argument(
+        "--show-secret",
+        action="store_true",
+        help="print the password even in --json mode or when not on a terminal",
+    )
+
+
 def _apply_flag(p: argparse.ArgumentParser) -> None:
     p.add_argument("--apply", action="store_true", help="make changes (after diff + confirmation)")
 
@@ -88,13 +109,24 @@ SY = "system"
 COMMANDS: tuple[CommandSpec, ...] = (
     CommandSpec("list", (), "R", 3, "List all sites", handlers.site_list),
     # --- sites
-    CommandSpec(S, ("create",), "M", 5, "Create a site", configure=_create_args),
+    CommandSpec(
+        S, ("create",), "M", 5, "Create a site", site_handlers.create, configure=_create_args
+    ),
     CommandSpec(S, ("status",), "R", 3, "Show site status", handlers.site_status),
-    CommandSpec(S, ("enable",), "M", 5, "Enable a disabled site"),
-    CommandSpec(S, ("disable",), "M", 5, "Disable a site (maintenance page; data kept)"),
-    CommandSpec(S, ("delete",), "D", 5, "Delete a site", configure=_delete_args),
-    CommandSpec(S, ("repair",), "M", 5, "Finish or roll back an interrupted operation"),
-    CommandSpec(S, ("logs",), "R", 5, "Show site logs"),
+    CommandSpec(S, ("enable",), "M", 5, "Enable a disabled site", site_handlers.enable),
+    CommandSpec(
+        S,
+        ("disable",),
+        "M",
+        5,
+        "Disable a site (maintenance page; data kept)",
+        site_handlers.disable,
+    ),
+    CommandSpec(
+        S, ("delete",), "D", 5, "Delete a site", site_handlers.delete, configure=_delete_args
+    ),
+    CommandSpec(S, ("repair",), "M", 5, "Clean up an interrupted operation", site_handlers.repair),
+    CommandSpec(S, ("logs",), "R", 5, "Show site logs", site_handlers.logs, configure=_logs_args),
     # --- SSL
     CommandSpec(S, ("ssl",), "M", 6, "Issue a certificate now"),
     CommandSpec(S, ("autossl",), "M", 6, "Turn automatic certificates on/off"),
@@ -109,14 +141,30 @@ COMMANDS: tuple[CommandSpec, ...] = (
         S, ("php", "restart"), "M", 4, "Restart the site's PHP runtime", tenant_handlers.php_restart
     ),
     CommandSpec(S, ("php", "optimize"), "M", 7, "Tune the site's PHP-FPM pool"),
-    CommandSpec(S, ("php",), "M", 5, "Switch PHP version", configure=_php_version_arg),
+    CommandSpec(S, ("php",), "M", 7, "Switch PHP version", configure=_php_version_arg),
     CommandSpec(S, ("optimize",), "M", 7, "Analyze/optimize the site", configure=_optimize_args),
     # --- database
-    CommandSpec(S, ("db", "create"), "M", 5, "Create the site database"),
+    CommandSpec(
+        S,
+        ("db", "create"),
+        "M",
+        5,
+        "Create a site database",
+        site_handlers.db_create,
+        configure=_db_create_args,
+    ),
     CommandSpec(S, ("db", "status"), "R", 4, "Show database status", tenant_handlers.db_status),
     CommandSpec(S, ("db", "backup"), "M", 8, "Back up the database"),
     CommandSpec(S, ("db", "restore"), "D", 8, "Restore the database", configure=_restore_args),
-    CommandSpec(S, ("db", "credentials"), "M", 5, "Show or rotate database credentials"),
+    CommandSpec(
+        S,
+        ("db", "credentials"),
+        "M",
+        5,
+        "Show or rotate database credentials",
+        site_handlers.db_credentials,
+        configure=_db_credentials_args,
+    ),
     # --- SFTP
     CommandSpec(S, ("sftp", "create"), "M", 8, "Create an SFTP account"),
     CommandSpec(S, ("sftp", "list"), "R", 8, "List SFTP accounts"),
