@@ -24,3 +24,19 @@ CI (`.github/workflows/ci.yml`) runs the same checks, then the integration tests
 Integration tests refuse to run on any host without the `/etc/domainpilot-test-vm` marker. **Never create that marker on a production server.**
 
 Priorities: Security → Isolation → Reliability → Maintainability → Performance → Ease of use.
+
+## The `site` CLI (Phase 3 foundation)
+
+Implemented so far: `site list`, `site <domain> status`, `site system status`, `site help` and `site version`, plus `--json`, `--dry-run`, `--confirm` and `--help` everywhere. Every other command in [docs/cli-spec.md](docs/cli-spec.md) is already registered. Running one says which phase adds it.
+
+Layout on a server: the package lives in `/usr/lib/domainpilot/domainpilot/` and the wrapper at `/usr/local/bin/site` ([bin/site](bin/site)), which runs Python in isolated mode (`-I`). The runtime uses only the standard library. Core modules are in [domainpilot/core/](domainpilot/core/):
+
+| Module | Role |
+|---|---|
+| `validate` | strict validators (`fullmatch`, IDNA, special-use names); fuzz-tested |
+| `proc` | the only place subprocesses start: argv-only, absolute paths, scrubbed env, timeouts |
+| `fsutil` | atomic writes and no-follow reads; refuses symlinks and group- or world-writable directories |
+| `locks` | `flock`-based global/tenant locks |
+| `registry` | SQLite source of truth with migrations; tenant IDs/UIDs never reused |
+| `txn` | step transactions with reverse-order rollback and a crash journal |
+| `audit` | append-only JSON audit log + journald, with secrets redacted |

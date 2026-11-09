@@ -1,0 +1,11 @@
+#!/usr/bin/python3 -I
+# DomainPilot `site` command. Installed as /usr/local/bin/site (root:root 0755).
+# -I: isolated mode - ignores PYTHON* environment variables, the user site
+# directory and the current directory, so the caller cannot inject modules.
+import sys
+
+sys.path.insert(0, "/usr/lib/domainpilot")
+
+from domainpilot.cli.main import main  # noqa: E402
+
+raise SystemExit(main())
