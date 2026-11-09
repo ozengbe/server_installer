@@ -1,0 +1,6 @@
+    # DISABLED: `site ${domain} enable` restores the site.
+    location / {
+        default_type text/plain;
+        add_header Retry-After 3600 always;
+        return 503 "This site is temporarily unavailable.\n";
+    }

@@ -48,3 +48,37 @@
 - name: Verify the CLI starts
   ansible.builtin.command: /usr/local/bin/site version
   changed_when: false
+
+# Audit log (threat TH19): append-only. Existing entries cannot be changed or
+# truncated without first removing the flag, which `site system audit` reports
+# (AUDIT-APPEND-ONLY). No logrotate for this file: it grows slowly (one line
+# per privileged operation).
+- name: DomainPilot log directory
+  ansible.builtin.file:
+    path: /var/log/domainpilot
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+
+- name: Audit log file exists
+  ansible.builtin.file:
+    path: /var/log/domainpilot/audit.jsonl
+    state: touch
+    owner: root
+    group: root
+    mode: "0640"
+    modification_time: preserve
+    access_time: preserve
+
+- name: Read audit log attributes
+  ansible.builtin.command: /usr/bin/lsattr -d /var/log/domainpilot/audit.jsonl
+  register: cli_audit_attrs
+  changed_when: false
+  tags: [host-kernel]
+
+- name: Make the audit log append-only
+  ansible.builtin.command: /usr/bin/chattr +a /var/log/domainpilot/audit.jsonl
+  when: "'a' not in cli_audit_attrs.stdout.split()[0]"
+  changed_when: true
+  tags: [host-kernel]

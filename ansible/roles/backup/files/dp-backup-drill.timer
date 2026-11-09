@@ -1,0 +1,11 @@
+# Managed by DomainPilot (role backup).
+[Unit]
+Description=DomainPilot weekly restore drill
+
+[Timer]
+OnCalendar=Sun *-*-* 05:00
+RandomizedDelaySec=1h
+Persistent=true
+
+[Install]
+WantedBy=timers.target

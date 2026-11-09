@@ -32,6 +32,13 @@ check "firewall:table" nft list table inet domainpilot
 check "mariadb:socket" test -S /run/mysqld/mysqld.sock
 [[ -e /var/lib/domainpilot/firewall/pending ]] && warns+=("firewall:unconfirmed-change")
 [[ -e /run/reboot-required ]] && warns+=("reboot-required")
+# Certificates expiring within 14 days (renewal should have happened at 30).
+for cert in /etc/letsencrypt/live/*/cert.pem; do
+  [[ -e $cert ]] || continue
+  if ! openssl x509 -in "$cert" -noout -checkend 1209600 >/dev/null 2>&1; then
+    warns+=("certificate-expiring:$(basename "$(dirname "$cert")")")
+  fi
+done
 failed_units=$(systemctl list-units --state=failed --no-legend --plain 2>/dev/null | awk '{print $1}' | paste -sd, -)
 [[ -n $failed_units ]] && warns+=("failed-units:$failed_units")
 

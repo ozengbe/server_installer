@@ -264,7 +264,9 @@ def main(
         result: CommandResult
         if spec.kind in ("M", "D") and not flags.dry_run:
             pths.create_runtime_dirs()
-            with FileLock(pths.global_lock, timeout=ctx.config.lock_timeout):
+            job_lock = pths.run / ("job-" + "-".join(spec.words) + ".lock")
+            lock = pths.global_lock if spec.lock else job_lock
+            with FileLock(lock, timeout=ctx.config.lock_timeout if spec.lock else 5):
                 result = spec.handler(ctx, ns)
         else:
             result = spec.handler(ctx, ns)

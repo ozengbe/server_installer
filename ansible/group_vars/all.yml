@@ -31,6 +31,11 @@ dp_ssh_allow_v6: []
 dp_firewall_public_tcp: [80, 443]
 dp_firewall_public_udp: "{{ [443] if dp_nginx_http3 | bool else [] }}"
 
+# Origin lock: only Cloudflare may connect to ports 80/443 (IPv4 and IPv6).
+# Enable ONLY when every site on this server is proxied through Cloudflare:
+# direct visitors and HTTP-01 certificate validation are blocked.
+dp_cloudflare_origin_lock: false
+
 # WireGuard listen port, 0 = disabled.
 dp_wireguard_port: 0
 
@@ -88,6 +93,19 @@ dp_ssh_kex: "{{ dp_release_defaults[dp_release].ssh_kex }}"
 
 dp_mariadb_max_connections: 150
 dp_mariadb_innodb_buffer_pool_size: 256M
+# Ceiling for live buffer-pool growth by `site system optimize` (MariaDB 11.8+
+# fixes innodb_buffer_pool_size_max at startup; only address space is reserved,
+# not memory). Percent of RAM; the largest profile uses 30%.
+dp_mariadb_buffer_pool_max_pct: 50
+
+# Phase 8: nightly backups (local time; +- 30 min jitter) once a target is set
+# with `site system backup setup`. The weekly restore drill runs Sunday 05:00.
+dp_backup_time: "02:30"
+# Prometheus node exporter, bound to loopback only (scrape over WireGuard/SSH).
+dp_monitoring_node_exporter: true
+# Services that restart themselves after a crash (bounded) and alert when they
+# finally give up. Tenant units (dp-php@, dp-cache@) have this built in.
+dp_monitoring_recovery_units: [nginx, mariadb, fail2ban]
 
 # Unattended security upgrades: daily maintenance window (local time).
 # Never reboots; reboot-required is reported by dp-healthcheck.

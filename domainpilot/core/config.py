@@ -6,6 +6,7 @@ a default on a security-relevant setting. Secrets never live in this file.
 
 from __future__ import annotations
 
+import re
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
@@ -22,11 +23,17 @@ class Config:
     default_site_type: str = "php"
     default_tier: str = "s"
     lock_timeout: float = 30.0
+    # AutoSSL: request certificates automatically when a site is created.
+    autossl: bool = True
+    # Let's Encrypt staging CA (untrusted test certificates, generous limits).
+    ssl_staging: bool = False
+    ssl_email: str | None = None
 
 
 _SCHEMA: dict[str, dict[str, type]] = {
     "sites": {"default_php_version": str, "default_type": str, "default_tier": str},
     "cli": {"lock_timeout": float},
+    "ssl": {"autossl": bool, "staging": bool, "email": str},
 }
 
 
@@ -52,6 +59,7 @@ def load(path: Path) -> Config:
 
     sites = raw.get("sites", {})
     cli = raw.get("cli", {})
+    ssl = raw.get("ssl", {})
     site_type = sites.get("default_type", "php")
     if site_type not in ("php", "static", "proxy"):
         raise ValidationError(f"{path}: sites.default_type must be php, static or proxy")
@@ -66,6 +74,9 @@ def load(path: Path) -> Config:
         default_site_type=site_type,
         default_tier=tier,
         lock_timeout=timeout,
+        autossl=ssl.get("autossl", True),
+        ssl_staging=ssl.get("staging", False),
+        ssl_email=_email(path, ssl.get("email")),
     )
 
 
@@ -135,3 +146,11 @@ def load_host(path: Path) -> HostFacts:
         cache_engine=engine,
         nginx_user=nginx_user,
     )
+
+
+def _email(path: Path, value: str | None) -> str | None:
+    if value is None:
+        return None
+    if not re.fullmatch(r"[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9.-]{1,253}\.[A-Za-z]{2,63}", value):
+        raise ValidationError(f"{path}: ssl.email is not a valid address")
+    return value

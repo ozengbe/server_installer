@@ -1,0 +1,43 @@
+---
+# Cloudflare's published edge ranges, used for:
+#  * nginx real client IP (CF-Connecting-IP is trusted ONLY from these ranges)
+#  * the optional origin lock (dp_cloudflare_origin_lock: only Cloudflare may
+#    connect to ports 80/443)
+- name: Fetch Cloudflare IPv4 ranges
+  ansible.builtin.uri:
+    url: https://www.cloudflare.com/ips-v4
+    return_content: true
+    timeout: 20
+  register: cloudflare_v4_raw
+  failed_when: false
+
+- name: Fetch Cloudflare IPv6 ranges
+  ansible.builtin.uri:
+    url: https://www.cloudflare.com/ips-v6
+    return_content: true
+    timeout: 20
+  register: cloudflare_v6_raw
+  failed_when: false
+
+- name: Parse and validate the ranges
+  ansible.builtin.set_fact:
+    dp_cloudflare_v4: "{{ cloudflare_v4_lines | select('match', '^[0-9]{1,3}(\\.[0-9]{1,3}){3}/[0-9]{1,2}\\Z') | list }}"
+    dp_cloudflare_v6: "{{ cloudflare_v6_lines | select('match', '^[0-9a-f:]+/[0-9]{1,3}\\Z') | list }}"
+  vars:
+    cloudflare_v4_lines: "{{ (cloudflare_v4_raw.content | default('')).split() if cloudflare_v4_raw.status | default(0) == 200 else [] }}"
+    cloudflare_v6_lines: "{{ (cloudflare_v6_raw.content | default('')).split() if cloudflare_v6_raw.status | default(0) == 200 else [] }}"
+
+# Cloudflare publishes ~15 IPv4 and ~7 IPv6 ranges. Far fewer means the
+# download was truncated or tampered with: never lock the origin on that.
+- name: Refuse to lock the origin with an implausible range list
+  ansible.builtin.assert:
+    that:
+      - dp_cloudflare_v4 | length >= 8
+      - dp_cloudflare_v6 | length >= 4
+    fail_msg: "Could not get a plausible Cloudflare IP list; refusing to enable the origin lock."
+  when: dp_cloudflare_origin_lock | bool
+
+- name: Warn when real-IP support is unavailable
+  ansible.builtin.debug:
+    msg: "Cloudflare IP ranges unavailable; nginx will log Cloudflare's IPs instead of visitors'."
+  when: dp_cloudflare_v4 | length < 8

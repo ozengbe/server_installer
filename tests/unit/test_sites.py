@@ -1,10 +1,7 @@
 from __future__ import annotations
 
 import argparse
-import grp
 import io
-import os
-import pwd
 import socket
 from pathlib import Path
 from typing import Any
@@ -14,7 +11,6 @@ import pytest
 from domainpilot.cli import site_handlers
 from domainpilot.cli.context import Context
 from domainpilot.core import fsutil, proc
-from domainpilot.core.audit import AuditLog
 from domainpilot.core.config import Config, HostFacts
 from domainpilot.core.errors import (
     NotImplementedYet,
@@ -28,7 +24,7 @@ from domainpilot.core.paths import Paths
 from domainpilot.core.registry import Registry
 from domainpilot.core.sysinfo import SystemProbe
 from domainpilot.isolation import db as db_module
-from domainpilot.sites.lifecycle import CreateRequest, SiteManager
+from domainpilot.sites.lifecycle import CreateRequest
 from domainpilot.web.nginx import Nginx, Upstream, parse_upstream
 
 HOST = HostFacts(release="26.04", default_php_version="8.5", php_versions=("8.5",))
@@ -162,97 +158,6 @@ def test_apply_validates_and_restores(tmp_path: Path) -> None:
         state["fail"] = True
         nginx.apply("new.example.com", "broken\n")
     assert not nginx.conf_path("new.example.com").exists()  # new file removed
-
-
-# --- lifecycle (fake system) -----------------------------------------------------------
-
-
-@pytest.fixture
-def system(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
-    paths = Paths.under(tmp_path / "root")
-    for d in (
-        paths.tenants,
-        paths.etc / "tenants",
-        paths.log / "tenants",
-        paths.var_lib / "cache",
-        paths.systemd,
-        paths.apparmor,
-        paths.run,
-    ):
-        d.mkdir(parents=True, mode=0o755)
-    calls: list[list[str]] = []
-    users: set[str] = set()
-    state = {"nginx_fail": False, "start_fail": False}
-
-    def run(argv: list[str], **_kw: Any) -> proc.Result:
-        calls.append(list(argv))
-        if argv[0] == "/usr/sbin/useradd":
-            users.add(argv[-1])
-        if argv[0] == "/usr/sbin/userdel":
-            users.discard(argv[-1])
-        if argv[:2] == ["/usr/sbin/nginx", "-t"] and state["nginx_fail"]:
-            return proc.Result(tuple(argv), 1, "", "nginx: [emerg] bad\n")
-        if argv[:3] == ["/usr/bin/systemctl", "enable", "--now"]:
-            if state["start_fail"]:
-                raise OperationFailed("unit failed to start")
-            for arg in argv[3:]:
-                tenant = arg.split("@")[1].split(".")[0]
-                kind = "php" if arg.startswith("dp-php@") else "cache"
-                sock = paths.tenant_run(tenant) / kind / f"{kind}.sock"
-                sock.parent.mkdir(parents=True, exist_ok=True)
-                if not sock.exists():
-                    s = socket.socket(socket.AF_UNIX)
-                    s.bind(str(sock))
-                    s.close()
-        return proc.Result(tuple(argv), 0, "", "")
-
-    def getpwnam(name: str) -> Any:
-        if name in users:
-            return pwd.struct_passwd((name, "x", os.getuid(), os.getgid(), "", "", ""))
-        raise KeyError(name)
-
-    monkeypatch.setattr(pwd, "getpwnam", getpwnam)
-    monkeypatch.setattr(pwd, "getpwuid", lambda uid: (_ for _ in ()).throw(KeyError(uid)))
-    monkeypatch.setattr(grp, "getgrgid", lambda gid: (_ for _ in ()).throw(KeyError(gid)))
-    monkeypatch.setattr(
-        grp, "getgrnam", lambda name: grp.struct_group((name, "x", os.getgid(), []))
-    )
-    if os.geteuid() != 0:
-        monkeypatch.setattr(os, "chown", lambda *a, **k: None)
-        monkeypatch.setattr(os, "fchown", lambda *a, **k: None)
-    paths.create_runtime_dirs()
-    registry = Registry.open(paths.registry)
-    assert registry is not None
-    conf = tmp_path / "sites"
-    logs = tmp_path / "nginxlogs"
-    conf.mkdir(mode=0o755)
-    logs.mkdir(mode=0o750)
-    reported: list[tuple[str, str]] = []
-
-    def manager(dry_run: bool = False) -> SiteManager:
-        return SiteManager(
-            paths=paths,
-            host=HOST,
-            registry=registry,
-            audit=AuditLog(paths.audit_log, use_syslog=False),
-            argv=["site", "test"],
-            run=run,
-            nginx=Nginx(paths, conf_dir=conf, log_root=logs, run=run),
-            reporter=lambda d, s: reported.append((d, s)),
-            dry_run=dry_run,
-            upstream_parser=lambda v: parse_upstream(v, resolve=public_resolver),
-        )
-
-    return {
-        "paths": paths,
-        "registry": registry,
-        "calls": calls,
-        "state": state,
-        "manager": manager,
-        "conf": conf,
-        "users": users,
-        "reported": reported,
-    }
 
 
 def test_create_php_site(system: dict[str, Any]) -> None:

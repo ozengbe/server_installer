@@ -6,6 +6,8 @@ After=network.target
 ConditionPathExists=/etc/domainpilot/tenants/%i/cache.conf
 StartLimitIntervalSec=300
 StartLimitBurst=5
+# After the last failed restart: alert (role monitoring, dp-alert@.service).
+OnFailure=dp-alert@%n.service
 
 [Service]
 Type=notify

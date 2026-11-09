@@ -79,3 +79,63 @@ sudo fail2ban-client status sshd                   # list banned IPs
 sudo fail2ban-client set sshd unbanip <your-ip>
 sudo fail2ban-client set recidive unbanip <your-ip> # if banned repeatedly
 ```
+
+## Backups (Phase 8)
+
+Backups go to an S3-compatible bucket (Backblaze B2, Wasabi, AWS S3, Cloudflare R2, …). Each site gets its own encrypted restic repository inside it, and the server configuration gets one more. Nothing is backed up until you configure a target.
+
+1. **Create the bucket** in your provider's console:
+   - **versioning ON** and **Object Lock ON**, with a default retention of, for example, 30 days (*compliance* mode if offered);
+   - lifecycle rule: delete *non-current* versions after the retention period, so storage doesn't grow forever.
+2. **Create an application key for this bucket only** that can list, read and write objects but **cannot delete object versions or change retention** (B2: no `deleteFiles`/`writeFileRetentions`; AWS: no `s3:DeleteObjectVersion`, `s3:PutObjectRetention`, `s3:BypassGovernanceRetention`). A compromised server can then only add delete markers; the locked versions survive.
+3. **Connect the server.** The credentials go through stdin, never the command line:
+
+   ```bash
+   printf 'AWS_ACCESS_KEY_ID=%s\nAWS_SECRET_ACCESS_KEY=%s\n' "<key id>" "<secret>" \
+     | sudo site system backup setup --repository s3:https://s3.<region>.backblazeb2.com/<bucket>/<server-name> --credentials-stdin
+   ```
+
+   Run it in a terminal: it prints the **master key** once. **Store it offline** (password manager or paper). Without it the backups can't be read after the server is lost. Show it again with `sudo site system backup show-key`.
+4. **Check it:** `sudo site system backup` (first full run), then `sudo site system backup --status` and `sudo site system backup --test-restore`.
+
+Schedule: nightly at `dp_backup_time` (default 02:30 ± 30 min). Every Sunday at 05:00 an integrity check and a restore drill run. Retention defaults to 7 daily, 4 weekly and 6 monthly snapshots (`--keep-daily/--keep-weekly/--keep-monthly` at setup).
+
+Restoring:
+
+```bash
+sudo site example.com backup list
+sudo site example.com restore --all --to-staging --confirm example.com   # look first, nothing live changes
+sudo site example.com restore --files --confirm example.com             # files only (previous copy is kept)
+sudo site example.com restore --db --snapshot <id> --confirm example.com # one database (safety copy taken first)
+```
+
+**New server after a total loss:** install DomainPilot. Then run `sudo site system backup import-key` (paste the master key) and `sudo site system backup setup` with the same repository and credentials. Recreate the sites and restore each one.
+
+## Alerts (Phase 8)
+
+The server checks itself every 5 minutes. When something changes it sends an alert, for example:
+- a site stops answering;
+- a service crashes (it is restarted automatically, at most 5 times in 10 minutes);
+- the disk fills up;
+- a certificate is about to expire;
+- a backup is overdue or a restore drill fails.
+
+```bash
+# phone push via ntfy (pick a long random topic name: it is the password)
+echo 'https://ntfy.sh/<long-random-topic>' | sudo site system alerts setup --kind ntfy --url-stdin
+# or Slack / Discord incoming webhook, or Telegram:
+#   https://api.telegram.org/bot<token>/sendMessage?chat_id=<id>  (--kind telegram)
+sudo site system alerts test
+```
+
+Options: `--min-severity warn|critical` and `--reminder-hours N` (how often a still-open critical problem is repeated). `sudo site system monitor` shows the current problems without sending anything.
+
+## SFTP for site owners (Phase 8)
+
+```bash
+sudo site example.com sftp create --key alice.pub --name alice
+# alice connects with: sftp t0001-deploy@<server>   (lands in /app; web root is /app/public)
+sudo site example.com sftp revoke alice --confirm example.com
+```
+
+Key-only (Ed25519 recommended; RSA must be at least 3072 bits). The account is chrooted to its own site, has no shell and no port forwarding, and uploads are readable by the web server and PHP but nobody else.

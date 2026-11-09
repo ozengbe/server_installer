@@ -1,0 +1,77 @@
+---
+# Phase 8: self-monitoring and alerting (architecture §6). Alert destinations
+# are configured at runtime with `site system alerts setup` (secret URL, stdin).
+
+- name: Monitoring state directory (root only)
+  ansible.builtin.file:
+    path: /var/lib/domainpilot/monitor
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Monitor and alert units
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "/etc/systemd/system/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: [dp-monitor.service, dp-monitor.timer, dp-alert@.service]
+  notify: Reload systemd
+
+- name: Drop-in directories for bounded restarts
+  ansible.builtin.file:
+    path: "/etc/systemd/system/{{ item }}.service.d"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop: "{{ dp_monitoring_recovery_units }}"
+
+- name: Bounded restart and alert on final failure
+  ansible.builtin.copy:
+    src: 80-domainpilot-recovery.conf
+    dest: "/etc/systemd/system/{{ item }}.service.d/80-domainpilot-recovery.conf"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ dp_monitoring_recovery_units }}"
+  notify: Reload systemd
+
+- name: Prometheus node exporter (loopback only)
+  when: dp_monitoring_node_exporter | bool
+  block:
+    - name: Install the node exporter
+      ansible.builtin.apt:
+        name: prometheus-node-exporter
+        state: present
+        install_recommends: false
+
+    - name: Bind the node exporter to loopback
+      ansible.builtin.copy:
+        dest: /etc/default/prometheus-node-exporter
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          # Managed by DomainPilot (role monitoring). Loopback only: reach it via
+          # an SSH tunnel or WireGuard. The firewall blocks 9100 regardless.
+          ARGS="--web.listen-address=127.0.0.1:9100"
+      register: monitoring_exporter_conf
+
+    - name: Restart the node exporter after a configuration change
+      ansible.builtin.systemd_service:
+        name: prometheus-node-exporter
+        state: restarted
+        enabled: true
+      when: monitoring_exporter_conf is changed  # noqa: no-handler
+
+- name: Apply unit changes before enabling the monitor
+  ansible.builtin.meta: flush_handlers
+
+- name: Enable the monitor timer
+  ansible.builtin.systemd_service:
+    name: dp-monitor.timer
+    enabled: true
+    state: started

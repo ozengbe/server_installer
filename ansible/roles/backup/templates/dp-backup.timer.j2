@@ -1,0 +1,11 @@
+# Managed by DomainPilot (role backup).
+[Unit]
+Description=DomainPilot nightly backup
+
+[Timer]
+OnCalendar=*-*-* {{ dp_backup_time }}
+RandomizedDelaySec=30m
+Persistent=true
+
+[Install]
+WantedBy=timers.target

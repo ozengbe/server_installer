@@ -41,7 +41,6 @@
       Before=slices.target
 
       [Slice]
-      CPUAccounting=yes
       MemoryAccounting=yes
       TasksAccounting=yes
       IOAccounting=yes

@@ -12,6 +12,19 @@
     group: mysql
     mode: "0700"
 
+- name: Default MariaDB sizing (owned by the optimizer afterwards)
+  ansible.builtin.copy:
+    dest: /etc/mysql/mariadb.conf.d/98-domainpilot-tuning.cnf
+    force: false
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Installer default. Managed by `site system optimize` from now on.
+      [mysqld]
+      max_connections = {{ dp_mariadb_max_connections }}
+      innodb_buffer_pool_size = {{ dp_mariadb_innodb_buffer_pool_size }}
+
 - name: Apply MariaDB hardening with restore on failure
   block:
     - name: MariaDB hardening configuration

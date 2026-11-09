@@ -35,15 +35,25 @@
       session.use_only_cookies = 1
       mail.add_x_header = Off
       opcache.enable = 1
-      opcache.memory_consumption = 128
       opcache.interned_strings_buffer = 16
-      opcache.max_accelerated_files = 20000
       opcache.validate_timestamps = 1
       opcache.revalidate_freq = 2
       ; Each tenant runs its own master, so OPcache is never shared across tenants.
       opcache.validate_permission = 1
       opcache.validate_root = 1
       opcache.jit = disable
+
+- name: Default OPcache sizing (owned by the optimizer afterwards)
+  ansible.builtin.copy:
+    dest: "/etc/php/{{ dp_php_version }}/fpm/conf.d/98-domainpilot-tuning.ini"
+    force: false
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      ; Installer default. Managed by `site system optimize` from now on.
+      opcache.memory_consumption = 128
+      opcache.max_accelerated_files = 20000
 
 - name: Validate PHP-FPM configuration syntax
   ansible.builtin.command: /usr/sbin/php-fpm{{ dp_php_version }} -t

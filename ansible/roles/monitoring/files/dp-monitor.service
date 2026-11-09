@@ -1,0 +1,13 @@
+# Managed by DomainPilot (role monitoring). Self-check: health, sites, backups,
+# crash restarts. Alerts only on change (`site system monitor --notify`).
+[Unit]
+Description=DomainPilot self-monitoring
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/site system monitor --notify
+Nice=5
+PrivateTmp=yes
+NoNewPrivileges=yes
+TimeoutStartSec=10min

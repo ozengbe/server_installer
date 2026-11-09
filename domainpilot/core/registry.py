@@ -137,6 +137,18 @@ class Registry:
     def close(self) -> None:
         self._conn.close()
 
+    def backup_to(self, target: Path) -> None:
+        """Consistent copy of the live database (SQLite online backup), root 0600."""
+        target.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        target.unlink(missing_ok=True)
+        fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+        os.close(fd)
+        dest = sqlite3.connect(target)
+        try:
+            self._conn.backup(dest)
+        finally:
+            dest.close()
+
     @contextmanager
     def _tx(self) -> Iterator[sqlite3.Connection]:
         self._conn.execute("BEGIN IMMEDIATE")
@@ -290,6 +302,13 @@ class Registry:
             )
             if cur.rowcount != 1:
                 raise OperationFailed(f"site {domain} not found")
+
+    def set_php_version(self, tenant_id: str, version: str) -> None:
+        with self._tx() as conn:
+            conn.execute(
+                "UPDATE sites SET php_version = ? WHERE tenant_id = ?",
+                (validate.php_version(version), tenant_id),
+            )
 
     def sites_for_tenant(self, tenant_id: str) -> list[Site]:
         return [s for s in self.list_sites() if s.tenant_id == tenant_id]

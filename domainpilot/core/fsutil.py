@@ -78,7 +78,8 @@ def atomic_write(
             raise OperationFailed(f"refusing to replace symlink {path}")
         if not stat.S_ISREG(st.st_mode):
             raise OperationFailed(f"refusing to replace non-regular file {path}")
-        if read_bytes_nofollow(path) == payload and stat.S_IMODE(st.st_mode) == mode:
+        same_owner = (uid is None or st.st_uid == uid) and (gid is None or st.st_gid == gid)
+        if same_owner and stat.S_IMODE(st.st_mode) == mode and read_bytes_nofollow(path) == payload:
             return False
 
     fd, tmp_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".dp-tmp", dir=directory)

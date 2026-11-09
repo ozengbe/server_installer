@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+import tempfile
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
@@ -96,3 +97,80 @@ def run(
             f"{os.path.basename(args[0])} exited with status {result.returncode}: {tail}"
         )
     return result
+
+
+def pipeline(
+    producer: Sequence[str],
+    consumer: Sequence[str],
+    *,
+    timeout: float = DEFAULT_TIMEOUT,
+    env: Mapping[str, str] | None = None,
+    producer_env: Mapping[str, str] | None = None,
+    check: bool = True,
+) -> tuple[Result, Result]:
+    """``producer | consumer`` without a shell; both exit codes are checked.
+
+    Used to stream a database dump into ``restic backup --stdin`` without a
+    temporary file. A producer that fails half-way (truncated dump) raises even
+    when the consumer was happy with what it got; the caller then discards the
+    consumer's result (e.g. forgets the snapshot).
+    """
+    first, second = _check_argv(producer), _check_argv(consumer)
+    if timeout <= 0:
+        raise ValidationError("timeout must be positive")
+    errfile = tempfile.TemporaryFile()  # noqa: SIM115 - closed in finally
+    try:
+        prod = subprocess.Popen(  # noqa: S603 - argv validated above, never a shell
+            first,
+            stdout=subprocess.PIPE,
+            stderr=errfile,
+            stdin=subprocess.DEVNULL,
+            env=safe_env(producer_env),
+            cwd="/",
+            close_fds=True,
+        )
+    except FileNotFoundError:
+        errfile.close()
+        raise OperationFailed(f"command not found: {first[0]}") from None
+    try:
+        cons = subprocess.Popen(  # noqa: S603 - argv validated above, never a shell
+            second,
+            stdin=prod.stdout,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env=safe_env(env),
+            cwd="/",
+            close_fds=True,
+            text=True,
+        )
+    except FileNotFoundError:
+        prod.kill()
+        prod.wait()
+        errfile.close()
+        raise OperationFailed(f"command not found: {second[0]}") from None
+    if prod.stdout is not None:
+        prod.stdout.close()  # the consumer owns the read end now (SIGPIPE reaches prod)
+    try:
+        out, err = cons.communicate(timeout=timeout)
+        prod.wait(timeout=30)
+        errfile.seek(0)
+        prod_err = errfile.read(64 * 1024).decode(errors="replace")
+    except subprocess.TimeoutExpired:
+        for p in (prod, cons):
+            p.kill()
+            p.wait()
+        raise OperationFailed(f"pipeline timed out after {timeout:g}s: {first[0]}") from None
+    finally:
+        errfile.close()
+    results = (
+        Result(first, prod.returncode, "", prod_err),
+        Result(second, cons.returncode, out, err),
+    )
+    for result in results if check else ():
+        if not result.ok:
+            detail = result.stderr.strip().splitlines()
+            raise OperationFailed(
+                f"{os.path.basename(result.argv[0])} exited with status {result.returncode}: "
+                + (detail[-1] if detail else "no output")
+            )
+    return results

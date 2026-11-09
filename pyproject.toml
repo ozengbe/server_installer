@@ -28,7 +28,7 @@ include = ["domainpilot*"]
 [tool.pytest.ini_options]
 testpaths = ["tests/unit", "tests/security"]
 addopts = "-ra --strict-markers"
-pythonpath = ["tests"]
+pythonpath = ["tests", "tests/unit"]
 markers = [
   "integration: needs a disposable Ubuntu 24.04 VM with root (never production)",
 ]

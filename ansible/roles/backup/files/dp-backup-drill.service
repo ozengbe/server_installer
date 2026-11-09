@@ -1,0 +1,18 @@
+# Managed by DomainPilot (role backup). Weekly proof that backups work: a
+# repository integrity check (2% of the data re-read) and a restore drill that
+# restores every site's newest backup into staging and checks it is complete.
+[Unit]
+Description=DomainPilot backup verification and restore drill
+ConditionPathExists=/etc/domainpilot/backup.json
+After=network-online.target dp-backup.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/site system backup --verify
+ExecStart=/usr/local/bin/site system backup --test-restore
+Nice=10
+IOSchedulingClass=idle
+PrivateTmp=yes
+NoNewPrivileges=yes
+TimeoutStartSec=12h

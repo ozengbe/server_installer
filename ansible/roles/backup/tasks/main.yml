@@ -1,0 +1,46 @@
+---
+# Phase 8: restic backups (architecture §6). Targets, keys and retention are
+# set at runtime with `site system backup setup`; this role installs restic
+# and the schedule. Each site has its own repository and key.
+
+- name: Install restic
+  ansible.builtin.apt:
+    name: restic
+    state: present
+
+- name: Backup state directory (root only)
+  ansible.builtin.file:
+    path: /var/lib/domainpilot/backup
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Backup and restore-drill units
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "/etc/systemd/system/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: [dp-backup.service, dp-backup-drill.service, dp-backup-drill.timer]
+  notify: Reload systemd
+
+- name: Nightly backup timer
+  ansible.builtin.template:
+    src: dp-backup.timer.j2
+    dest: /etc/systemd/system/dp-backup.timer
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload systemd
+
+- name: Apply unit changes before enabling timers
+  ansible.builtin.meta: flush_handlers
+
+- name: Enable backup timers
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    enabled: true
+    state: started
+  loop: [dp-backup.timer, dp-backup-drill.timer]

@@ -44,6 +44,16 @@ def test_atomic_write_is_idempotent(safe_dir: Path) -> None:
     assert target.read_bytes() == b"y"
 
 
+@pytest.mark.skipif(os.geteuid() != 0, reason="needs root to chown")
+def test_atomic_write_fixes_owner_even_if_bytes_match(safe_dir: Path) -> None:
+    target = safe_dir / "f.conf"
+    fsutil.atomic_write(target, b"x", mode=0o640, uid=0, gid=0)
+    # Same bytes and mode, different group: must still be rewritten (rollback case).
+    assert fsutil.atomic_write(target, b"x", mode=0o640, uid=0, gid=12345) is True
+    assert target.stat().st_gid == 12345
+    assert fsutil.atomic_write(target, b"x", mode=0o640, uid=0, gid=12345) is False
+
+
 def test_atomic_write_refuses_symlink_target(safe_dir: Path, tmp_path: Path) -> None:
     victim = tmp_path / "victim"
     victim.write_text("keep")

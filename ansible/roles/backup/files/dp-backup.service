@@ -1,0 +1,17 @@
+# Managed by DomainPilot (role backup). Nightly backup of every site and of the
+# server configuration (`site system backup`). Does nothing until a target is
+# configured with `site system backup setup`.
+[Unit]
+Description=DomainPilot nightly backup
+ConditionPathExists=/etc/domainpilot/backup.json
+After=network-online.target mariadb.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/site system backup
+Nice=10
+IOSchedulingClass=idle
+PrivateTmp=yes
+NoNewPrivileges=yes
+TimeoutStartSec=12h

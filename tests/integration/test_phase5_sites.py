@@ -246,6 +246,8 @@ def _assert_no_trace(domain: str) -> None:
     # Only tenants of other (still existing) sites may remain.
     for line in live.splitlines():
         unit = line.split()[0]
+        if not unit.startswith(("dp-php@", "dp-cache@")):
+            continue  # host units (dp-monitor, dp-backup, dp-alert@<unit>) are not tenants'
         owner = unit.split("@")[1].split(".")[0]
         assert owner in tenants, f"orphan unit {unit}"
 

@@ -10,16 +10,26 @@ undoes everything; a crash leaves the tenant in "provisioning", which
 from __future__ import annotations
 
 import grp
+import json
 import pwd
 import shutil
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
+from domainpilot.cloudflare.api import CloudflareError, Zone
+from domainpilot.cloudflare.creds import CredentialStore
+from domainpilot.cloudflare.manager import CloudflareManager, ZoneRef
 from domainpilot.core import fsutil, proc, validate
 from domainpilot.core.audit import AuditLog
-from domainpilot.core.config import HostFacts
-from domainpilot.core.errors import NotImplementedYet, OperationFailed, PreconditionFailed
+from domainpilot.core.config import Config, HostFacts
+from domainpilot.core.errors import (
+    DPError,
+    NotImplementedYet,
+    OperationFailed,
+    PreconditionFailed,
+)
 from domainpilot.core.paths import Paths
 from domainpilot.core.registry import Registry, Site, Tenant
 from domainpilot.core.txn import Reporter, Step, Transaction
@@ -27,7 +37,13 @@ from domainpilot.isolation import db
 from domainpilot.isolation.limits import TenantLimits
 from domainpilot.isolation.provision import SYSTEMCTL, Provisioner
 from domainpilot.isolation.render import TenantSpec
-from domainpilot.web.nginx import Nginx, Upstream, parse_upstream
+from domainpilot.isolation.render import render as render_tenant
+from domainpilot.optimize.site import measure_workers, recommend_limits
+from domainpilot.optimize.snapshot import SnapshotStore
+from domainpilot.sftp import SftpManager
+from domainpilot.tls import dns
+from domainpilot.tls.acme import Certbot
+from domainpilot.web.nginx import DEFAULT_HSTS, Nginx, TlsFiles, Upstream, parse_upstream
 
 Runner = Callable[..., proc.Result]
 UpstreamParser = Callable[[str], Upstream]
@@ -55,6 +71,8 @@ class CreateRequest:
     upstream: str | None = None
     writable_code: bool = False
     limits: TenantLimits = field(default_factory=TenantLimits)
+    # Manage the site's DNS in Cloudflare when its zone is reachable with a stored token.
+    cloudflare: bool = True
 
 
 class SiteManager:
@@ -71,6 +89,11 @@ class SiteManager:
         reporter: Reporter | None = None,
         dry_run: bool = False,
         upstream_parser: UpstreamParser = parse_upstream,
+        config: Config | None = None,
+        certbot: Certbot | None = None,
+        host_ips: Callable[[], set[str]] | None = None,
+        resolver: dns.Resolver = dns.resolve,
+        cloudflare: CloudflareManager | None = None,
     ) -> None:
         self.paths = paths
         self.host = host
@@ -83,6 +106,12 @@ class SiteManager:
         self.dry_run = dry_run
         self.parse_upstream = upstream_parser
         self.provisioner = Provisioner(paths, host, run=run)
+        self.config = config or Config()
+        self.certbot = certbot or Certbot(run=run)
+        self.host_ips = host_ips or (lambda: dns.host_addresses(run))
+        self.resolver = resolver
+        self.cloudflare = cloudflare or CloudflareManager(CredentialStore(run=run))
+        self.sftp = SftpManager(audit=audit, argv=argv, run=run, keys_dir=paths.ssh_keys)
 
     # --- helpers -------------------------------------------------------------
 
@@ -122,9 +151,31 @@ class SiteManager:
         else:
             kind = site.site_type
             upstream = self.parse_upstream(settings["upstream"]) if kind == "proxy" else None
+        tls = self._tls(site.domain, settings)
         return self.nginx.render(
-            kind, domain=site.domain, aliases=aliases, tenant=tenant.id, upstream=upstream
+            kind,
+            domain=site.domain,
+            aliases=aliases,
+            tenant=tenant.id,
+            upstream=upstream,
+            tls=tls,
+            hsts_max_age=int(settings.get("hsts", DEFAULT_HSTS)),
         )
+
+    def _tls(self, domain: str, settings: dict[str, Any]) -> TlsFiles | None:
+        """Serve HTTPS only if TLS is enabled for the site AND the files exist."""
+        if settings.get("tls", {}).get("enabled") and self.certbot.exists(domain):
+            return self.certbot.files(domain)
+        return None
+
+    def _update_settings(self, tenant: str, **changes: Any) -> None:
+        settings = self.registry.get_tenant_settings(tenant)
+        settings.update(changes)
+        self.registry.set_tenant_settings(tenant, settings)
+
+    def _names(self, tenant: str) -> list[str]:
+        sites = self.registry.sites_for_tenant(tenant)
+        return [s.domain for s in sorted(sites, key=lambda s: (not s.is_primary, s.domain))]
 
     def _units(self, tenant: str) -> list[str]:
         settings = self.registry.get_tenant_settings(tenant)
@@ -188,6 +239,9 @@ class SiteManager:
                     "cache": is_php,
                     "upstream": upstream.url if upstream else None,
                     "limits": req.limits.to_dict(),
+                    "autossl": self.config.autossl,
+                    "tls": {"enabled": False},
+                    "hsts": DEFAULT_HSTS,
                 },
             )
         spec = TenantSpec(
@@ -203,8 +257,11 @@ class SiteManager:
             if not self.dry_run:
                 self.registry.set_tenant_status(tenant.id, "purged")
             raise
+        ssl_note = cf_note = None
         if not self.dry_run:
             self.registry.set_tenant_status(tenant.id, "active")
+            cf_note = self._cloudflare_after_create(domain, tenant.id) if req.cloudflare else None
+            ssl_note = self._autossl_after_create(domain)
         return {
             "domain": domain,
             "aliases": aliases,
@@ -213,7 +270,296 @@ class SiteManager:
             "php_version": php if is_php else None,
             "dry_run": self.dry_run,
             "plan": result.plan if self.dry_run else None,
+            "cloudflare": cf_note,
+            "ssl": ssl_note,
         }
+
+    # --- Cloudflare -------------------------------------------------------------------
+
+    def _cf_ref(self, tenant: str) -> ZoneRef | None:
+        """The Cloudflare zone this site's DNS is managed in (None = not managed)."""
+        cf = self.registry.get_tenant_settings(tenant).get("cloudflare")
+        if not cf:
+            return None
+        return ZoneRef(cf["label"], Zone(cf["zone_id"], cf["zone"], "active", ""))
+
+    def _eligibility(self, tenant: str, names: list[str]) -> list[str]:
+        """Why a certificate cannot be issued now (DNS-01 via Cloudflare or HTTP-01)."""
+        ref = self._cf_ref(tenant)
+        if ref is not None:
+            try:
+                return self.cloudflare.records_ok(ref, names, self.host_ips())
+            except CloudflareError as exc:
+                return [f"Cloudflare: {exc.message}"]
+        return dns.problems(names, self.host_ips(), self.resolver)
+
+    def _cloudflare_after_create(self, domain: str, tenant: str) -> str | None:
+        """Point the new site's names at this server through Cloudflare (proxied).
+
+        Never fails the creation: problems are reported and the site keeps
+        working for DNS you manage yourself.
+        """
+        try:
+            ref = self.cloudflare.zone_for(domain)
+        except (CloudflareError, DPError) as exc:
+            return f"skipped: {getattr(exc, 'message', exc)}"
+        if ref is None:
+            return None  # not on Cloudflare (or no token for its zone): nothing to do
+        names = self._names(tenant)
+        outside = [n for n in names if n != ref.zone.name and not n.endswith("." + ref.zone.name)]
+        names = [n for n in names if n not in outside]
+        try:
+            actions = self.cloudflare.ensure_records(ref, names, self.host_ips(), tenant)
+        except (CloudflareError, DPError) as exc:
+            message = getattr(exc, "message", str(exc))
+            if self.reporter:
+                self.reporter(f"Cloudflare DNS not configured: {message}", "failed")
+            return f"not configured: {message}"
+        self._update_settings(
+            tenant,
+            cloudflare={
+                "label": ref.label,
+                "zone": ref.zone.name,
+                "zone_id": ref.zone.id,
+                "proxied": True,
+            },
+        )
+        for action in actions:
+            if self.reporter:
+                self.reporter(f"Cloudflare: {action}", "done")
+        note = f"proxied through Cloudflare zone {ref.zone.name}"
+        if outside:
+            note += f" (not in this zone, manage yourself: {', '.join(outside)})"
+        return note
+
+    def _cloudflare_cleanup(self, domain: str, tenant: str) -> list[str]:
+        """Remove the records DomainPilot created for this site (tagged ones only)."""
+        ref = self._cf_ref(tenant)
+        if ref is None:
+            return []
+        try:
+            return self.cloudflare.remove_records(ref, self._names(tenant) or [domain], tenant)
+        except (CloudflareError, DPError) as exc:
+            return [f"Cloudflare cleanup failed: {getattr(exc, 'message', exc)}"]
+
+    def cloudflare_audit(self, domain: str, sections: list[str]) -> dict[str, Any]:
+        _site, tenant = self.primary_site(domain)
+        ref = self._cf_ref(tenant.id) or self.cloudflare.zone_for(domain)
+        if ref is None:
+            raise PreconditionFailed(
+                f"{domain} is not in any Cloudflare zone reachable with a stored token",
+                hint="add a token: sudo site system cloudflare token add",
+            )
+        # Use fresh zone data (status) for the audit.
+        fresh = next((z for z in self.cloudflare.zones(ref.label) if z.id == ref.zone.id), ref.zone)
+        audit = self.cloudflare.audit(
+            ZoneRef(ref.label, fresh), self._names(tenant.id), self.host_ips(), sections=sections
+        )
+        result = audit.as_dict()
+        result["managed"] = self._cf_ref(tenant.id) is not None
+        return result
+
+    def cloudflare_sync(self, domain: str) -> dict[str, Any]:
+        """--apply for `cloudflare dns`: (re)create this site's proxied records."""
+        _site, tenant = self.primary_site(domain)
+        ref = self._cf_ref(tenant.id) or self.cloudflare.zone_for(domain)
+        if ref is None:
+            raise PreconditionFailed(f"{domain} is not in a Cloudflare zone with a stored token")
+        actions = self.cloudflare.ensure_records(
+            ref, self._names(tenant.id), self.host_ips(), tenant.id, dry_run=self.dry_run
+        )
+        if not self.dry_run:
+            self._update_settings(
+                tenant.id,
+                cloudflare={
+                    "label": ref.label,
+                    "zone": ref.zone.name,
+                    "zone_id": ref.zone.id,
+                    "proxied": True,
+                },
+            )
+            self.audit.record(
+                "cloudflare.dns",
+                argv=self.argv,
+                outcome="success",
+                details={"domain": domain, "actions": actions},
+            )
+        return {"domain": domain, "actions": actions, "dry_run": self.dry_run}
+
+    def _autossl_after_create(self, domain: str) -> str:
+        """Try to get a certificate for a new site. Never fails the creation."""
+        if not self.config.autossl:
+            return "autossl is off; run: sudo site " + domain + " ssl"
+        try:
+            self.ssl_issue(domain)
+        except DPError as exc:
+            if self.reporter:
+                self.reporter(f"no certificate yet: {exc.message}", "failed")
+            return f"not issued yet ({exc.message}); the site is served over HTTP"
+        return "issued"
+
+    # --- TLS / AutoSSL --------------------------------------------------------------
+
+    def ssl_issue(self, domain: str, *, staging: bool | None = None) -> dict[str, Any]:
+        """Obtain a certificate, verify it, then switch the vhost to HTTPS."""
+        site, tenant = self.primary_site(domain)
+        if tenant.status != "active":
+            raise PreconditionFailed(
+                f"{domain} is {tenant.status}; certificates need an active site"
+            )
+        names = self._names(tenant.id)
+        use_staging = self.config.ssl_staging if staging is None else staging
+        reasons = self._eligibility(tenant.id, names)
+        if reasons:
+            raise PreconditionFailed(
+                "not eligible for a certificate yet: " + "; ".join(reasons),
+                hint="point DNS (A and AAAA records) at this server, then run: "
+                f"sudo site {domain} ssl",
+            )
+        settings = self.registry.get_tenant_settings(tenant.id)
+        previous_tls = dict(settings.get("tls", {}))
+        previous_vhost: list[bytes | None] = []
+        info: list[Any] = []
+
+        def obtain() -> None:
+            cf = self._cf_ref(tenant.id)
+            ini = self.cloudflare.store.certbot_ini(cf.label) if cf else None
+            try:
+                self.certbot.issue(
+                    domain,
+                    names,
+                    staging=use_staging,
+                    email=self.config.ssl_email,
+                    dns_credentials=ini,
+                )
+            finally:
+                if cf:
+                    self.cloudflare.store.discard_ini(cf.label)
+
+        def check() -> None:
+            info.append(self.certbot.verify(domain, names))
+
+        def record() -> None:
+            self._update_settings(tenant.id, tls={"enabled": True, "staging": use_staging})
+
+        def unrecord() -> None:
+            self._update_settings(tenant.id, tls=previous_tls)
+
+        def vhost() -> None:
+            previous_vhost.append(
+                self.nginx.apply(domain, self._render(site, tenant, enabled=site.enabled))
+            )
+
+        txn = self._txn(domain)
+        txn.add(
+            Step(
+                "certificate",
+                f"request a certificate for {', '.join(names)}"
+                + (" (staging CA)" if use_staging else ""),
+                obtain,
+            )
+        )
+        txn.add(Step("verify-certificate", "verify names, validity and key match", check))
+        txn.add(Step("record-tls", "mark HTTPS as enabled", record, unrecord))
+        txn.add(
+            Step(
+                "https-vhost",
+                f"switch nginx for {domain} to HTTPS (validated)",
+                vhost,
+                lambda: self.nginx.restore(domain, previous_vhost[0] if previous_vhost else None),
+            )
+        )
+        txn.execute()
+        if self.dry_run:
+            return {"domain": domain, "names": names, "staging": use_staging, "dry_run": True}
+        cert = info[0]
+        return {
+            "domain": domain,
+            "names": list(cert.names),
+            "staging": cert.staging,
+            "issuer": cert.issuer,
+            "not_after": cert.not_after.isoformat(),
+            "days_left": cert.days_left,
+        }
+
+    def ssl_status(self, domain: str) -> dict[str, Any]:
+        _site, tenant = self.primary_site(domain)
+        settings = self.registry.get_tenant_settings(tenant.id)
+        cert = self.certbot.info(domain)
+        names = self._names(tenant.id)
+        return {
+            "domain": domain,
+            "autossl": bool(settings.get("autossl", False)),
+            "https": bool(self._tls(domain, settings)),
+            "hsts_max_age": settings.get("hsts", DEFAULT_HSTS),
+            "eligibility_problems": self._eligibility(tenant.id, names),
+            "challenge": "dns-01 (Cloudflare)" if self._cf_ref(tenant.id) else "http-01",
+            "certificate": None
+            if cert is None
+            else {
+                "names": list(cert.names),
+                "issuer": cert.issuer,
+                "staging": cert.staging,
+                "not_after": cert.not_after.isoformat(),
+                "days_left": cert.days_left,
+                "covers_all_names": set(names) <= set(cert.names),
+            },
+        }
+
+    def ssl_renew(self, domain: str, *, force: bool) -> dict[str, Any]:
+        _site, tenant = self.primary_site(domain)
+        if not self.certbot.exists(domain):
+            raise PreconditionFailed(f"{domain} has no certificate", hint=f"sudo site {domain} ssl")
+        if self.dry_run:
+            return {"domain": domain, "force": force, "dry_run": True}
+        self.certbot.renew(domain, force=force)
+        cert = self.certbot.verify(domain, self._names(tenant.id))
+        self.audit.record(
+            "ssl.renew",
+            argv=self.argv,
+            outcome="success",
+            details={"domain": domain, "not_after": cert.not_after.isoformat()},
+        )
+        return {
+            "domain": domain,
+            "days_left": cert.days_left,
+            "not_after": cert.not_after.isoformat(),
+        }
+
+    def ssl_revoke(self, domain: str) -> dict[str, Any]:
+        """Back to HTTP first (so nginx never points at deleted files), then revoke."""
+        site, tenant = self.primary_site(domain)
+        if not self.certbot.exists(domain):
+            raise PreconditionFailed(f"{domain} has no certificate")
+        if self.dry_run:
+            return {"domain": domain, "dry_run": True}
+        settings = self.registry.get_tenant_settings(tenant.id)
+        self._update_settings(tenant.id, tls={"enabled": False}, autossl=False)
+        try:
+            self.nginx.apply(domain, self._render(site, tenant, enabled=site.enabled))
+        except DPError:
+            self.registry.set_tenant_settings(tenant.id, settings)
+            raise
+        self.certbot.revoke(domain)
+        self.audit.record(
+            "ssl.revoke", argv=self.argv, outcome="success", details={"domain": domain}
+        )
+        return {"domain": domain, "revoked": True, "autossl": False}
+
+    def set_autossl(self, domain: str, on: bool) -> dict[str, Any]:
+        _site, tenant = self.primary_site(domain)
+        if self.dry_run:
+            return {"domain": domain, "autossl": on, "dry_run": True}
+        self._update_settings(tenant.id, autossl=on)
+        result: dict[str, Any] = {"domain": domain, "autossl": on, "issued": False}
+        if on and not self.certbot.exists(domain):
+            reasons = self._eligibility(tenant.id, self._names(tenant.id))
+            if reasons:
+                result["waiting_for"] = reasons
+            else:
+                self.ssl_issue(domain)
+                result["issued"] = True
+        return result
 
     def _add_site_steps(
         self,
@@ -366,6 +712,11 @@ class SiteManager:
             self.nginx.remove(domain)
             if self.reporter:
                 self.reporter(f"removed nginx configuration for {domain}", "done")
+            for line in self._cloudflare_cleanup(domain, tenant.id):
+                if self.reporter:
+                    self.reporter(line, "failed" if "failed" in line else "done")
+        if self.sftp.revoke_all(tenant.id) and self.reporter:
+            self.reporter(f"revoked SFTP access of {tenant.id}", "done")
         if not purge:
             units = self._units(tenant.id)
             if units:
@@ -384,6 +735,10 @@ class SiteManager:
             return {"domain": domain, "tenant": tenant.id, "purge": False, "problems": []}
 
         problems = self.provisioner.purge(tenant.id)
+        try:
+            self.certbot.delete(domain)
+        except DPError as exc:
+            problems.append(f"certificate: {exc.message}")
         shutil.rmtree(self.nginx.log_dir(tenant.id), ignore_errors=True)
         for name in names:
             self.registry.remove_site(name)
@@ -454,3 +809,127 @@ class SiteManager:
             for a in actions:
                 self.reporter(a, "planned" if self.dry_run else "done")
         return {"domain": domain, "actions": actions, "problems": problems, "dry_run": self.dry_run}
+
+    # --- tuning & PHP version (Phase 7) -------------------------------------------------
+
+    def _tenant_files(
+        self, tenant: Tenant, limits: TenantLimits, php_version: str
+    ) -> dict[Path, Any]:
+        settings = self.registry.get_tenant_settings(tenant.id)
+        spec = TenantSpec(
+            tenant.id,
+            tenant.uid,
+            php_version,
+            limits,
+            cache=bool(settings.get("cache")),
+            php=bool(settings.get("php")),
+        )
+        return {f.path: f for f in render_tenant(spec, self.paths, self.host)}
+
+    def _write_tenant_files(self, tenant: Tenant, files: dict[Path, Any]) -> None:
+        gid = grp.getgrnam(tenant.id).gr_gid
+        for path, f in files.items():
+            fsutil.atomic_write(
+                path, f.content, mode=f.mode, uid=0, gid=gid if f.group_is_tenant else 0
+            )
+
+    def site_optimize(self, domain: str, *, apply: bool) -> dict[str, Any]:
+        _site, tenant = self.primary_site(domain)
+        settings = self.registry.get_tenant_settings(tenant.id)
+        if not settings.get("php"):
+            raise PreconditionFailed(f"{domain} has no PHP runtime to tune")
+        current = TenantLimits.from_dict(settings.get("limits", {}))
+        stats = measure_workers(tenant.id)
+        recommended, basis = recommend_limits(current, stats)
+        result: dict[str, Any] = {
+            "domain": domain,
+            "basis": basis,
+            "current": {"php_max_children": current.php_max_children},
+            "recommended": {"php_max_children": recommended.php_max_children},
+            "changed": recommended != current,
+            "applied": False,
+        }
+        if not apply or not result["changed"] or self.dry_run:
+            return result
+        php = str(settings.get("php_version") or self.host.default_php_version)
+        files = self._tenant_files(tenant, recommended, php)
+        snap = SnapshotStore(self.paths.var_lib / "optimize").take(
+            f"site:{domain}", list(files), note=json.dumps({"limits": current.to_dict()})
+        )
+        self._write_tenant_files(tenant, files)
+        self._update_settings(tenant.id, limits=recommended.to_dict())
+        self.run([SYSTEMCTL, "daemon-reload"], timeout=60)
+        self.run([SYSTEMCTL, "restart", f"dp-php@{tenant.id}.service"], timeout=120)
+        self.audit.record(
+            "site.optimize",
+            argv=self.argv,
+            outcome="success",
+            details={
+                "domain": domain,
+                "snapshot": snap.id,
+                "php_max_children": recommended.php_max_children,
+            },
+        )
+        result.update(applied=True, snapshot=snap.id)
+        return result
+
+    def site_optimize_rollback(self, domain: str, snap_id: str) -> dict[str, Any]:
+        _site, tenant = self.primary_site(domain)
+        store = SnapshotStore(self.paths.var_lib / "optimize")
+        snap = store.get(snap_id)
+        if snap.kind != f"site:{domain}":
+            raise PreconditionFailed(f"snapshot {snap_id} does not belong to {domain}")
+        if self.dry_run:
+            return {"domain": domain, "snapshot": snap_id, "dry_run": True}
+        changed = store.restore(snap)
+        previous = json.loads(snap.note or "{}").get("limits")
+        if previous:
+            self._update_settings(tenant.id, limits=previous)
+        self.run([SYSTEMCTL, "daemon-reload"], timeout=60)
+        self.run([SYSTEMCTL, "restart", f"dp-php@{tenant.id}.service"], timeout=120)
+        self.audit.record(
+            "site.optimize.rollback",
+            argv=self.argv,
+            outcome="success",
+            details={"domain": domain, "snapshot": snap_id},
+        )
+        return {"domain": domain, "snapshot": snap_id, "restored": changed}
+
+    def php_switch(self, domain: str, version: str) -> dict[str, Any]:
+        _site, tenant = self.primary_site(domain)
+        version = validate.php_version(version)
+        settings = self.registry.get_tenant_settings(tenant.id)
+        if not settings.get("php"):
+            raise PreconditionFailed(f"{domain} has no PHP runtime")
+        if version not in self.host.php_versions:
+            raise PreconditionFailed(
+                f"PHP {version} is not installed on this host "
+                f"(installed: {', '.join(self.host.php_versions)})"
+            )
+        old = str(settings.get("php_version"))
+        if version == old:
+            return {"domain": domain, "php_version": version, "changed": False}
+        if self.dry_run:
+            return {"domain": domain, "from": old, "to": version, "dry_run": True}
+        limits = TenantLimits.from_dict(settings.get("limits", {}))
+        old_files = self._tenant_files(tenant, limits, old)
+        new_files = self._tenant_files(tenant, limits, version)
+        unit = f"dp-php@{tenant.id}.service"
+        try:
+            self._write_tenant_files(tenant, new_files)
+            self.run([SYSTEMCTL, "daemon-reload"], timeout=60)
+            self.run([SYSTEMCTL, "restart", unit], timeout=120)
+        except DPError:
+            self._write_tenant_files(tenant, old_files)
+            self.run([SYSTEMCTL, "daemon-reload"], timeout=60)
+            self.run([SYSTEMCTL, "restart", unit], timeout=120, check=False)
+            raise
+        self._update_settings(tenant.id, php_version=version)
+        self.registry.set_php_version(tenant.id, version)
+        self.audit.record(
+            "php.switch",
+            argv=self.argv,
+            outcome="success",
+            details={"domain": domain, "from": old, "to": version},
+        )
+        return {"domain": domain, "from": old, "to": version, "changed": True}

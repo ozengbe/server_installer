@@ -21,6 +21,18 @@ table inet domainpilot {
 		elements = { {{ dp_ssh_allow_v6 | join(', ') }} }
 	}
 {% endif %}
+{% if dp_cloudflare_origin_lock | bool %}
+	set cloudflare_v4 {
+		type ipv4_addr
+		flags interval
+		elements = { {{ dp_cloudflare_v4 | join(', ') }} }
+	}
+	set cloudflare_v6 {
+		type ipv6_addr
+		flags interval
+		elements = { {{ dp_cloudflare_v6 | join(', ') }} }
+	}
+{% endif %}
 
 	chain input {
 		type filter hook input priority filter; policy drop;
@@ -48,7 +60,15 @@ table inet domainpilot {
 {% endif %}
 {% endif %}
 
-{% if dp_firewall_public_tcp %}
+{% if dp_cloudflare_origin_lock | bool %}
+		# Origin lock: web ports only from Cloudflare (direct access would bypass its WAF).
+		ip saddr @cloudflare_v4 tcp dport { 80, 443 } accept comment "origin lock: Cloudflare only"
+		ip6 saddr @cloudflare_v6 tcp dport { 80, 443 } accept comment "origin lock: Cloudflare only"
+{% set other_tcp = dp_firewall_public_tcp | map('int') | reject('in', [80, 443]) | list %}
+{% if other_tcp %}
+		tcp dport { {{ other_tcp | join(', ') }} } accept comment "public tcp"
+{% endif %}
+{% elif dp_firewall_public_tcp %}
 		tcp dport { {{ dp_firewall_public_tcp | join(', ') }} } accept comment "public tcp"
 {% endif %}
 {% if dp_firewall_public_udp %}

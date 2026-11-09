@@ -115,6 +115,29 @@
           endscript
       }
 
+# Tuning files belong to the optimizer after the first install (force: false):
+# the installer must never undo `site system optimize`.
+- name: Default nginx tuning (events)
+  ansible.builtin.copy:
+    dest: /etc/nginx/domainpilot/tuning-events.conf
+    force: false
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Installer default. Managed by `site system optimize` from now on.
+      worker_connections {{ dp_nginx_worker_connections }};
+
+- name: Default nginx tuning (http)
+  ansible.builtin.copy:
+    dest: /etc/nginx/domainpilot/tuning-http.conf
+    force: false
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Installer default (no file cache). Managed by `site system optimize`.
+
 - name: Self-signed placeholder cert for the default server (never presented; handshake rejected)
   ansible.builtin.command: >-
     /usr/bin/openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes

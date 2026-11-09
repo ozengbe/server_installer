@@ -53,18 +53,25 @@ def test_help_does_not_require_root(run_cli: RunCli) -> None:
     assert run_cli("system", "--help", euid=1000).code == 0
 
 
-def test_scope_help_lists_commands_and_phases(run_cli: RunCli) -> None:
+@pytest.fixture
+def planned(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A not-yet-implemented command (every real one is implemented by Phase 9)."""
+    spec = CommandSpec("site", ("future",), "R", 10, "Something for later")
+    monkeypatch.setattr(commands, "COMMANDS", (*commands.COMMANDS, spec))
+
+
+def test_scope_help_lists_commands_and_phases(run_cli: RunCli, planned: None) -> None:
     r = run_cli("example.com", "--help")
     assert r.code == 0
-    assert "ssl status" in r.out and "[Phase 6]" in r.out
+    assert "ssl status" in r.out and "isolation test" in r.out and "[Phase 10]" in r.out
     assert "status" in r.out
 
 
-def test_command_help(run_cli: RunCli) -> None:
+def test_command_help(run_cli: RunCli, planned: None) -> None:
     r = run_cli("example.com", "create", "--help")
     assert r.code == 0 and "--type" in r.out and "Planned" not in r.out
-    r = run_cli("example.com", "ssl", "renew", "--help")
-    assert r.code == 0 and "Planned for Phase 6" in r.out
+    r = run_cli("example.com", "future", "--help")
+    assert r.code == 0 and "Planned for Phase 10" in r.out
     r = run_cli("system", "status", "--help")
     assert r.code == 0 and "Planned" not in r.out
 
@@ -113,10 +120,10 @@ def test_double_dash_passes_through(run_cli: RunCli) -> None:
     assert r.code == ExitCode.USAGE
 
 
-def test_not_implemented_names_phase(run_cli: RunCli) -> None:
-    r = run_cli("example.com", "ssl", "renew")
-    assert r.code == ExitCode.FAILED and "Phase 6" in r.err
-    r = run_cli("--json", "example.com", "php", "8.3")
+def test_not_implemented_names_phase(run_cli: RunCli, planned: None) -> None:
+    r = run_cli("example.com", "future")
+    assert r.code == ExitCode.FAILED and "Phase 10" in r.err
+    r = run_cli("--json", "example.com", "future")
     assert r.json()["errors"][0]["code"] == "not_implemented"
 
 

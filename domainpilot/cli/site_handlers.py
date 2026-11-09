@@ -30,6 +30,7 @@ def _manager(ctx: Context) -> SiteManager:
         argv=ctx.argv,
         reporter=ctx.out.step,
         dry_run=ctx.dry_run,
+        config=ctx.config,
     )
 
 
@@ -51,6 +52,7 @@ def create(ctx: Context, args: argparse.Namespace) -> CommandResult:
         tier=args.tier or ctx.config.default_tier,
         upstream=args.upstream,
         writable_code=args.writable_code,
+        cloudflare=not getattr(args, "no_cloudflare", False),
     )
     result = _manager(ctx).create(req)
     if result["dry_run"]:
@@ -58,7 +60,11 @@ def create(ctx: Context, args: argparse.Namespace) -> CommandResult:
     text = [
         f"Created {domain} ({result['type']}) as tenant {result['tenant']}.",
         "Next steps:",
-        f"  - point DNS for {', '.join([domain, *result['aliases']])} at this server",
+        (
+            f"  - Cloudflare: {result['cloudflare']}"
+            if result.get("cloudflare")
+            else f"  - point DNS for {', '.join([domain, *result['aliases']])} at this server"
+        ),
         "  - upload files over SFTP (Phase 8) into the tenant's app/public directory",
         f"  - database: sudo site {domain} db create" if result["type"] == "php" else "",
         "  - HTTPS certificates arrive in Phase 6",

@@ -1,0 +1,11 @@
+# Managed by DomainPilot (role monitoring).
+[Unit]
+Description=DomainPilot self-monitoring every 5 minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+AccuracySec=30s
+
+[Install]
+WantedBy=timers.target

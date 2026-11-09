@@ -6,16 +6,19 @@ Description=DomainPilot PHP-FPM for tenant %i
 After=network.target mariadb.service dp-cache@%i.service
 Wants=dp-cache@%i.service
 ConditionPathExists=/etc/domainpilot/tenants/%i/php-fpm.conf
+# No ExecReload: the sandbox may not exec, so php-fpm cannot re-exec itself on
+# USR2. Configuration changes use `systemctl restart` (Type=notify waits for ready).
 # Bounded self-healing: no endless restart loops.
 StartLimitIntervalSec=300
 StartLimitBurst=5
+# After the last failed restart: alert (role monitoring, dp-alert@.service).
+OnFailure=dp-alert@%n.service
 
 [Service]
 Type=notify
 User=%i
 Group=%i
 ExecStart=/bin/false
-ExecReload=/bin/kill -USR2 $MAINPID
 Restart=on-failure
 RestartSec=5
 UMask=0027

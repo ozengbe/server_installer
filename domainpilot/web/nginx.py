@@ -34,6 +34,20 @@ Runner = Callable[..., proc.Result]
 Resolver = Callable[[str, int], list[str]]
 
 
+DEFAULT_HSTS = 300  # 5 minutes: HSTS is rolled out in steps (raise once HTTPS is proven)
+MAX_HSTS = 63072000  # 2 years
+
+
+def _template(name: str) -> Template:
+    return Template((TEMPLATE_DIR / name).read_text(encoding="utf-8"))
+
+
+@dataclass(frozen=True)
+class TlsFiles:
+    certificate: Path
+    key: Path
+
+
 def _resolve(host: str, port: int) -> list[str]:
     infos = socket.getaddrinfo(host, port, proto=socket.IPPROTO_TCP)
     return sorted({str(info[4][0]) for info in infos})
@@ -116,10 +130,23 @@ class Nginx:
         aliases: list[str],
         tenant: str,
         upstream: Upstream | None = None,
+        tls: TlsFiles | None = None,
+        hsts_max_age: int = DEFAULT_HSTS,
     ) -> str:
+        """Compose the site body (php/static/proxy/maintenance) into the HTTP or
+        HTTPS wrapper. HSTS is only ever sent over HTTPS."""
         if kind not in SITE_KINDS:
             raise ValidationError(f"unknown site kind {kind!r}")
+        if kind == "proxy" and upstream is None:
+            raise ValidationError("proxy sites need --upstream https://host")
+        if not 0 <= hsts_max_age <= MAX_HSTS:
+            raise ValidationError(f"HSTS max-age must be between 0 and {MAX_HSTS}")
         names = [validate.domain(domain), *(validate.domain(a) for a in aliases)]
+        hsts = (
+            f'    add_header Strict-Transport-Security "max-age={hsts_max_age}" always;'
+            if tls and hsts_max_age
+            else ""
+        )
         values = {
             "domain": names[0],
             "server_names": " ".join(names),
@@ -129,11 +156,14 @@ class Nginx:
             "php_socket": str(self.paths.php_socket(tenant)),
             "upstream": upstream.url if upstream else "",
             "upstream_host": upstream.host_header if upstream else "",
+            "hsts": hsts,
+            "certificate": str(tls.certificate) if tls else "",
+            "certificate_key": str(tls.key) if tls else "",
         }
-        if kind == "proxy" and upstream is None:
-            raise ValidationError("proxy sites need --upstream https://host")
-        template = Template((TEMPLATE_DIR / f"{kind}.conf.tmpl").read_text(encoding="utf-8"))
-        return template.substitute(values)
+        body = _template(f"{kind}.body.tmpl").substitute(values)
+        wrapper = _template("https.tmpl" if tls else "http.tmpl")
+        # The body is inserted as a value, so its nginx "$" variables are not re-read.
+        return wrapper.substitute({**values, "body": body.rstrip("\n")})
 
     def ensure_log_dir(self, tenant: str) -> bool:
         """Root-owned, group adm (log readers), 0750."""

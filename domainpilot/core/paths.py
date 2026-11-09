@@ -22,6 +22,7 @@ class Paths:
     tenants: Path
     systemd: Path = Path("/etc/systemd/system")
     apparmor: Path = Path("/etc/apparmor.d/domainpilot")
+    ssh_keys: Path = Path("/etc/ssh/authorized_keys.d")
 
     @classmethod
     def default(cls) -> Paths:
@@ -43,6 +44,7 @@ class Paths:
             tenants=root / "tenants",
             systemd=root / "systemd",
             apparmor=root / "apparmor",
+            ssh_keys=root / "ssh_keys",
         )
 
     @property

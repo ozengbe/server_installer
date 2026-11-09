@@ -11,4 +11,6 @@ nginx_config_files:
   - { src: tls.conf.j2, dest: /etc/nginx/domainpilot/snippets/tls.conf }
   - { src: security-headers.conf.j2, dest: /etc/nginx/domainpilot/snippets/security-headers.conf }
   - { src: deny-sensitive.conf.j2, dest: /etc/nginx/domainpilot/snippets/deny-sensitive.conf }
+  - { src: acme.conf.j2, dest: /etc/nginx/domainpilot/snippets/acme.conf }
+  - { src: cloudflare-realip.conf.j2, dest: /etc/nginx/domainpilot/snippets/cloudflare-realip.conf }
   - { src: default-server.conf.j2, dest: /etc/nginx/domainpilot/default-server.conf }

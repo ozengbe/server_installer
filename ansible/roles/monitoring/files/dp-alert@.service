@@ -1,0 +1,11 @@
+# Managed by DomainPilot (role monitoring). Started by OnFailure= of watched
+# services once systemd has given up restarting them: alert immediately.
+[Unit]
+Description=DomainPilot alert for failed unit %i
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/site system monitor --notify --unit-failed %i
+NoNewPrivileges=yes
+TimeoutStartSec=5min

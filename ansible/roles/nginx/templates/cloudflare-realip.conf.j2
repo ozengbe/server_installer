@@ -1,0 +1,9 @@
+# Managed by DomainPilot. Real visitor IP behind Cloudflare: the
+# CF-Connecting-IP header is trusted ONLY on connections from Cloudflare's
+# published ranges; from anywhere else it is ignored (cannot be spoofed).
+{% for net in dp_cloudflare_v4 + dp_cloudflare_v6 %}
+set_real_ip_from {{ net }};
+{% endfor %}
+{% if (dp_cloudflare_v4 + dp_cloudflare_v6) | length > 0 %}
+real_ip_header CF-Connecting-IP;
+{% endif %}
