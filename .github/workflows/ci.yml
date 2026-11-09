@@ -61,6 +61,10 @@ jobs:
           tools/ci/step.sh "integration tests" pytest --
           sudo python3 -m pytest -p no:cacheprovider -m integration -v -rf --tb=short tests/integration
 
+      - name: Diagnostics (only when something failed)
+        if: ${{ failure() }}
+        run: sudo tools/ci/diagnostics.sh
+
       - name: SSH login still works for the admin (key-only)
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: >-
