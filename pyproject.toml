@@ -1,0 +1,49 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "domainpilot"
+description = "DomainPilot Secure Server Management Platform"
+requires-python = ">=3.12"
+dynamic = ["version"]
+# Runtime is deliberately stdlib-only: nothing from PyPI ever runs as root on servers.
+dependencies = []
+
+[project.optional-dependencies]
+# Development tooling only. Never installed on servers.
+dev = [
+  "pytest==8.3.4",
+  "pytest-cov==6.0.0",
+  "mypy==1.13.0",
+  "ruff==0.8.4",
+]
+
+[tool.setuptools.dynamic]
+version = { attr = "domainpilot.__version__" }
+
+[tool.setuptools.packages.find]
+include = ["domainpilot*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests/unit", "tests/security"]
+addopts = "-ra --strict-markers"
+markers = [
+  "integration: needs a disposable Ubuntu 24.04 VM with root (never production)",
+]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+files = ["domainpilot", "tests"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "S", "N", "SIM", "PTH", "RUF"]
+ignore = []
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101"]  # assert is fine in tests

@@ -1,0 +1,12 @@
+#cloud-config
+# Disposable DomainPilot test VM. NEVER use this on a production host.
+package_update: true
+packages:
+  - python3-pytest
+  - nftables
+  - apparmor-utils
+write_files:
+  - path: /etc/domainpilot-test-vm
+    permissions: "0644"
+    content: |
+      This host is a disposable DomainPilot test VM. Destructive tests are allowed here.
