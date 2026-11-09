@@ -82,7 +82,10 @@ def test_sshd_config_is_valid() -> None:
 
 
 def test_sudoers_valid_and_scoped() -> None:
-    run("/usr/sbin/visudo", "-c")
+    # Validate DomainPilot's own file. `visudo -c` would also judge files other
+    # tools installed (e.g. CI runner images), which is not what this tests.
+    result = run("/usr/sbin/visudo", "-cf", "/etc/sudoers.d/90-domainpilot", check=False)
+    assert result.returncode == 0, result.stdout + result.stderr
     text = Path("/etc/sudoers.d/90-domainpilot").read_text(encoding="utf-8")
     assert "%dp-admins ALL=(ALL:ALL)" in text
     assert Path("/etc/sudoers.d/90-domainpilot").stat().st_mode & 0o777 == 0o440
