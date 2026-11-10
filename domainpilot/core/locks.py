@@ -31,7 +31,7 @@ class FileLock:
                 if time.monotonic() >= deadline:
                     os.close(fd)
                     raise LockBusy(
-                        f"another DomainPilot operation holds {self.path.name}",
+                        f"another Ozenix operation holds {self.path.name}",
                         hint="wait for it to finish, then retry",
                     ) from None
                 time.sleep(self.poll)

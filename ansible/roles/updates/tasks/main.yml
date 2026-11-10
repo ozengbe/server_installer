@@ -11,7 +11,7 @@
     group: root
     mode: "0644"
     content: |
-      // Managed by DomainPilot
+      // Managed by Ozenix
       APT::Periodic::Update-Package-Lists "1";
       APT::Periodic::Unattended-Upgrade "1";
       APT::Periodic::AutocleanInterval "7";
@@ -26,7 +26,7 @@
     group: root
     mode: "0644"
     content: |
-      // Managed by DomainPilot. Never reboot production servers automatically.
+      // Managed by Ozenix. Never reboot production servers automatically.
       Unattended-Upgrade::Automatic-Reboot "false";
       Unattended-Upgrade::Remove-Unused-Kernel-Packages "true";
       Unattended-Upgrade::Remove-Unused-Dependencies "false";
@@ -43,7 +43,7 @@
     group: root
     mode: "0644"
     content: |
-      # Managed by DomainPilot
+      # Managed by Ozenix
       $nrconf{restart} = 'a';
       # Never restart the database automatically; reported for a maintenance window instead.
       $nrconf{override_rc}{qr(^mariadb)} = 0;
@@ -74,7 +74,7 @@
     group: root
     mode: "0644"
     content: |
-      # Managed by DomainPilot
+      # Managed by Ozenix
       [Timer]
       OnCalendar=
       OnCalendar=*-*-* {{ dp_updates_window_start }}
@@ -89,7 +89,7 @@
     group: root
     mode: "0644"
     content: |
-      # Managed by DomainPilot. "-" prefix: a failing check is logged/alerted, not fatal.
+      # Managed by Ozenix. "-" prefix: a failing check is logged/alerted, not fatal.
       [Service]
       ExecStartPost=-/usr/local/sbin/dp-healthcheck --post-update
   register: updates_service

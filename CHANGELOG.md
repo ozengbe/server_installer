@@ -38,7 +38,7 @@ First packaged release. Supports Ubuntu 24.04 and 26.04 LTS.
   - the admin guide and runbooks.
 
 ### Changed (Cloudflare and HTTPS, the CloudPanel way)
-- **DomainPilot no longer touches DNS by default.** Point the records at the server yourself, with the Cloudflare proxy on or off. Proxied DNS records are now opt-in: `create --cloudflare-dns`.
+- **Ozenix no longer touches DNS by default.** Point the records at the server yourself, with the Cloudflare proxy on or off. Proxied DNS records are now opt-in: `create --cloudflare-dns`.
 - **Every new site gets a self-signed placeholder certificate at once**, so HTTPS works immediately behind Cloudflare (SSL/TLS mode "Full"). Plain HTTP keeps working for direct visitors until Let's Encrypt issues a real certificate.
 - **Names proxied through Cloudflare count as pointing at this server** when checking whether a certificate can be issued. The Let's Encrypt challenge passes through the proxy.
 - **AutoSSL retries automatically.** The 5-minute self-check requests the certificate once DNS is ready, at most once an hour per site.

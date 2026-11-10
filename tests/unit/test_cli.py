@@ -40,7 +40,7 @@ def test_no_args_prints_help_with_usage_code(run_cli: RunCli) -> None:
 @pytest.mark.parametrize("argv", [["help"], ["--help"], ["-h"]])
 def test_help(run_cli: RunCli, argv: list[str]) -> None:
     r = run_cli(*argv)
-    assert r.code == 0 and "DomainPilot site manager" in r.out
+    assert r.code == 0 and "Ozenix site manager" in r.out
 
 
 def test_version(run_cli: RunCli) -> None:
@@ -228,7 +228,7 @@ def fake_commands(monkeypatch: pytest.MonkeyPatch, paths: Paths) -> list[str]:
         return CommandResult({"zapped": True}, ["zapped"])
 
     def touch(ctx: Context, _ns: argparse.Namespace) -> CommandResult:
-        with pytest.raises(Exception, match="another DomainPilot operation"):
+        with pytest.raises(Exception, match="another Ozenix operation"):
             FileLock(ctx.paths.global_lock, timeout=0.1).acquire()
         calls.append("touch")
         return CommandResult({})

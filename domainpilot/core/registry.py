@@ -163,8 +163,8 @@ class Registry:
         current = self.schema_version()
         if current > len(_MIGRATIONS):
             raise OperationFailed(
-                f"registry schema v{current} is newer than this DomainPilot "
-                f"(supports v{len(_MIGRATIONS)}); upgrade DomainPilot first"
+                f"registry schema v{current} is newer than this Ozenix "
+                f"(supports v{len(_MIGRATIONS)}); upgrade Ozenix first"
             )
         for number, script in enumerate(_MIGRATIONS[current:], start=current + 1):
             with self._tx() as conn:

@@ -20,7 +20,7 @@ def _site_tenant(ctx: Context) -> tuple[Site, Tenant]:
     site = registry.get_site(ctx.domain) if (registry and ctx.domain) else None
     if site is None or registry is None:
         raise PreconditionFailed(
-            f"{ctx.domain} is not a DomainPilot site",
+            f"{ctx.domain} is not an Ozenix site",
             hint=f"create it with: sudo site {ctx.domain} create",
         )
     tenant = registry.get_tenant(site.tenant_id)

@@ -1,4 +1,4 @@
-# Making a DomainPilot release (maintainers)
+# Making an Ozenix release (maintainers)
 
 Administrators install only **signed release tarballs**. This page covers how one is made.
 
@@ -46,7 +46,7 @@ We use SSH signatures (`ssh-keygen -Y`) because every Ubuntu server already has 
 2. Set the version in `domainpilot/__init__.py` (`MAJOR.MINOR.PATCH`, `rcN` for candidates). Add a `## <version>` section to `CHANGELOG.md` with upgrade notes. Commit.
 3. Tag and build:
    ```bash
-   git tag -s v0.10.0 -m "DomainPilot 0.10.0"
+   git tag -s v0.10.0 -m "Ozenix 0.10.0"
    bash tools/release.sh --key ~/.ssh/domainpilot-release
    ```
    The script refuses to build if:

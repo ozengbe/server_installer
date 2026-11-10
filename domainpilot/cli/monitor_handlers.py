@@ -182,7 +182,7 @@ def alerts_setup(ctx: Context, args: argparse.Namespace) -> CommandResult:
 def alerts_test(ctx: Context, _args: argparse.Namespace) -> CommandResult:
     notifier = _notifier(ctx)
     host = socket.getfqdn()
-    notifier.send(Alert("test", "info", "DomainPilot alert test: delivery works.", "test", host))
+    notifier.send(Alert("test", "info", "Ozenix alert test: delivery works.", "test", host))
     return CommandResult({"sent": True}, ["Test alert sent."])
 
 

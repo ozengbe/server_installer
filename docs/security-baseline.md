@@ -1,4 +1,4 @@
-# DomainPilot — Security Baseline (Phase 1 draft)
+# Ozenix — Security Baseline (Phase 1 draft)
 
 This is the target state the Ansible installer enforces and `site system audit` checks. Each line becomes an audit check ID in Phase 9.
 

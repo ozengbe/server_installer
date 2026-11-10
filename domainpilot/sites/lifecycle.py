@@ -50,14 +50,14 @@ Runner = Callable[..., proc.Result]
 UpstreamParser = Callable[[str], Upstream]
 
 STARTER_PHP = """<?php
-// Placeholder created by DomainPilot. Replace it by uploading your site over SFTP.
+// Placeholder created by Ozenix. Replace it by uploading your site over SFTP.
 http_response_code(200);
 header('Content-Type: text/html; charset=utf-8');
 echo '<!doctype html><title>Site ready</title><h1>Site ready</h1>';
 """
 STARTER_HTML = (
     "<!doctype html><title>Site ready</title><h1>Site ready</h1>\n"
-    "<!-- Placeholder created by DomainPilot. Replace it by uploading your site. -->\n"
+    "<!-- Placeholder created by Ozenix. Replace it by uploading your site. -->\n"
 )
 UNFINISHED = ("provisioning",)
 
@@ -73,7 +73,7 @@ class CreateRequest:
     writable_code: bool = False
     limits: TenantLimits = field(default_factory=TenantLimits)
     # Opt-in (--cloudflare-dns): create proxied DNS records in Cloudflare. By default
-    # DomainPilot never touches DNS: point the name at the server yourself (orange
+    # Ozenix never touches DNS: point the name at the server yourself (orange
     # cloud on or off), like CloudPanel.
     cloudflare: bool = False
     # Try Let's Encrypt right after creation (--no-ssl turns AutoSSL off for the site).
@@ -139,7 +139,7 @@ class SiteManager:
         site = self.registry.get_site(domain)
         if site is None:
             raise PreconditionFailed(
-                f"{domain} is not a DomainPilot site",
+                f"{domain} is not an Ozenix site",
                 hint=f"create it with: sudo site {domain} create",
             )
         if not site.is_primary:
@@ -243,7 +243,7 @@ class SiteManager:
             )
         for name in (domain, *aliases):
             if self.registry.get_site(name) is not None:
-                raise PreconditionFailed(f"{name} is already a DomainPilot site (or alias)")
+                raise PreconditionFailed(f"{name} is already an Ozenix site (or alias)")
         is_php = req.site_type == "php"
         php = req.php_version or self.host.default_php_version
         if is_php and php not in self.host.php_versions:
@@ -367,7 +367,7 @@ class SiteManager:
         return note
 
     def _cloudflare_cleanup(self, domain: str, tenant: str) -> list[str]:
-        """Remove the records DomainPilot created for this site (tagged ones only)."""
+        """Remove the records Ozenix created for this site (tagged ones only)."""
         ref = self._cf_ref(tenant)
         if ref is None:
             return []

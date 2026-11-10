@@ -67,7 +67,7 @@ You need:
 - the **bucket credentials**;
 - the **repository URL**.
 
-1. Install DomainPilot on the new server ([install.md](../install.md)).
+1. Install Ozenix on the new server ([install.md](../install.md)).
 2. Connect it to the same backups:
    ```bash
    sudo site system backup import-key                       # paste the master key

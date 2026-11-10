@@ -113,7 +113,7 @@ def _scope_help(scope: str, target: str) -> list[str]:
     return lines
 
 
-TOP_HELP = f"""DomainPilot site manager {__version__}
+TOP_HELP = f"""Ozenix site manager {__version__}
 
 Usage:
   sudo site <domain> <command> [options]     manage one site, e.g. sudo site example.com status
@@ -155,7 +155,7 @@ Global options (anywhere on the line):
 
 Help for a scope:   site example.com --help    site system --help
 Help for a command: site example.com create --help
-Documentation: docs/admin-guide.md (day-to-day), docs/install.md"""
+All commands: docs/commands.md   Day-to-day: docs/admin-guide.md"""
 
 
 def _confirm_destructive(
@@ -210,7 +210,7 @@ def main(
             print(TOP_HELP, file=stdout)
             return int(ExitCode.OK if rest or flags.help else ExitCode.USAGE)
         if rest[0] == "version":
-            print(f"site (DomainPilot) {__version__}", file=stdout)
+            print(f"site (Ozenix) {__version__}", file=stdout)
             print(release.describe_installed(), file=stdout)
             return 0
 

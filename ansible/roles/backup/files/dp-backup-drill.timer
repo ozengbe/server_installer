@@ -1,6 +1,6 @@
-# Managed by DomainPilot (role backup).
+# Managed by Ozenix (role backup).
 [Unit]
-Description=DomainPilot weekly restore drill
+Description=Ozenix weekly restore drill
 
 [Timer]
 OnCalendar=Sun *-*-* 05:00

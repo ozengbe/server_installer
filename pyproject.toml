@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "domainpilot"
-description = "DomainPilot Secure Server Management Platform"
+description = "Ozenix Secure Server Management Platform"
 requires-python = ">=3.12"
 dynamic = ["version"]
 # Runtime is deliberately stdlib-only: nothing from PyPI ever runs as root on servers.

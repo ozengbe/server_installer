@@ -23,7 +23,7 @@ def _store() -> CredentialStore:
 def _render_audit(ctx: Context, result: dict[str, Any]) -> CommandResult:
     lines = [
         f"Cloudflare zone {result['zone']}"
-        + ("" if result.get("managed") else " (DNS not managed by DomainPilot)")
+        + ("" if result.get("managed") else " (DNS not managed by Ozenix)")
     ]
     for f in result["findings"]:
         lines.append(f"  {SYMBOL.get(f['severity'], f['severity'])}  {f['message']}")
@@ -65,7 +65,7 @@ def security(ctx: Context, args: argparse.Namespace) -> CommandResult:
 def _no_apply(args: argparse.Namespace) -> None:
     if getattr(args, "apply", False):
         raise UsageError(
-            "DomainPilot does not change Cloudflare zone settings (read-only token by design)",
+            "Ozenix does not change Cloudflare zone settings (read-only token by design)",
             hint="change it in the Cloudflare dashboard; this command shows what to change",
         )
 

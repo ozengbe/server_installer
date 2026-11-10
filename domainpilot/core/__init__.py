@@ -1,4 +1,4 @@
-"""Core building blocks shared by every DomainPilot command.
+"""Core building blocks shared by every Ozenix command.
 
 Security rules (architecture §5) are enforced here so command modules cannot
 bypass them: input validation, argv-only subprocesses, atomic no-follow file

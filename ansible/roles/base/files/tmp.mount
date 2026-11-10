@@ -1,6 +1,6 @@
-# Managed by DomainPilot
+# Managed by Ozenix
 [Unit]
-Description=Temporary Directory /tmp (DomainPilot hardened)
+Description=Temporary Directory /tmp (Ozenix hardened)
 Documentation=https://systemd.io/TEMPORARY_DIRECTORIES
 ConditionPathIsSymbolicLink=!/tmp
 DefaultDependencies=no

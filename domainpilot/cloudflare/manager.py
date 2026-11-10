@@ -3,10 +3,10 @@
 Safety rules:
 * Records are only created for the site's own names, and are tagged with a
   comment "domainpilot:<tenant>". Only records carrying that exact tag are
-  ever deleted, so DomainPilot never removes something it did not create.
-* An existing A/AAAA/CNAME record for a name that DomainPilot did not create
+  ever deleted, so Ozenix never removes something it did not create.
+* An existing A/AAAA/CNAME record for a name that Ozenix did not create
   stops the operation instead of being overwritten.
-* Zone settings are only read and reported: DomainPilot's token needs read
+* Zone settings are only read and reported: Ozenix's token needs read
   access to settings, never write access.
 """
 
@@ -123,7 +123,7 @@ class CloudflareManager:
             foreign = [r for r in existing if r.comment != tag(tenant)]
             if foreign:
                 raise PreconditionFailed(
-                    f"{name} already has DNS records in Cloudflare that DomainPilot did not "
+                    f"{name} already has DNS records in Cloudflare that Ozenix did not "
                     f"create ({', '.join(sorted({r.type for r in foreign}))})",
                     hint="remove them in Cloudflare, or create the site with --no-cloudflare",
                 )

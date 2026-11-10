@@ -20,7 +20,7 @@
     - /usr/lib/domainpilot/releases
     - "/usr/lib/domainpilot/releases/{{ dp_version }}"
 
-- name: Install the DomainPilot Python package
+- name: Install the Ozenix Python package
   ansible.builtin.copy:
     src: "{{ playbook_dir }}/../domainpilot/"
     dest: "/usr/lib/domainpilot/releases/{{ dp_version }}/domainpilot/"
@@ -104,7 +104,7 @@
 # truncated without first removing the flag, which `site system audit` reports
 # (AUDIT-APPEND-ONLY). No logrotate for this file: it grows slowly (one line
 # per privileged operation).
-- name: DomainPilot log directory
+- name: Ozenix log directory
   ansible.builtin.file:
     path: /var/log/domainpilot
     state: directory
@@ -133,3 +133,35 @@
   when: "'a' not in cli_audit_attrs.stdout.split()[0]"
   changed_when: true
   tags: [host-kernel]
+
+# Welcome screen at SSH login (Ubuntu's update-motd). Ubuntu's own help text
+# and news are switched off so the login shows Ozenix's information instead.
+- name: Ozenix welcome screen
+  ansible.builtin.template:
+    src: ozenix-motd.sh.j2
+    dest: /etc/update-motd.d/05-ozenix
+    owner: root
+    group: root
+    mode: "0755"
+  when: dp_motd_enabled | bool
+
+- name: Remove the welcome screen when disabled
+  ansible.builtin.file:
+    path: /etc/update-motd.d/05-ozenix
+    state: absent
+  when: not dp_motd_enabled | bool
+
+- name: Find Ubuntu's help-text and news login messages
+  ansible.builtin.stat:
+    path: "/etc/update-motd.d/{{ item }}"
+  loop: [10-help-text, 50-motd-news]
+  register: cli_motd_parts
+
+- name: Turn off Ubuntu's help-text and news login messages
+  ansible.builtin.file:
+    path: "{{ item.stat.path }}"
+    mode: "0644"
+  loop: "{{ cli_motd_parts.results | selectattr('stat.exists') | list }}"
+  when: dp_motd_enabled | bool
+  loop_control:
+    label: "{{ item.item }}"

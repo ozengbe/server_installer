@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build a DomainPilot release (docs/release.md).
+# Build an Ozenix release (docs/release.md).
 #
 #   tools/release.sh --key ~/.ssh/domainpilot-release [--out DIR]   from tag v<version>
 #   tools/release.sh --snapshot [--out DIR]                         unsigned test build of HEAD

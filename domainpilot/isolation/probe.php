@@ -1,5 +1,5 @@
 <?php
-// DomainPilot isolation probe. Executed through a tenant's own PHP-FPM, so it
+// Ozenix isolation probe. Executed through a tenant's own PHP-FPM, so it
 // runs inside the real sandbox. Every check reports whether an action was
 // possible; the caller decides which outcomes are acceptable.
 //   Params: DP_SELF=<tenant>, DP_OTHERS=<t2,t3>, DP_OTHER_DB=<db>

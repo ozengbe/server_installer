@@ -52,6 +52,8 @@
     - name: Group-specific rules at the end of sshd_config
       ansible.builtin.blockinfile:
         path: /etc/ssh/sshd_config
+        # Old product name kept on purpose: it is how existing servers find their
+        # block (a new marker would add a second copy).
         marker: "# {mark} DomainPilot managed block"
         insertafter: EOF
         block: "{{ lookup('ansible.builtin.template', 'match-blocks.j2') }}"

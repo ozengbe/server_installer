@@ -1,4 +1,4 @@
-## Managed by DomainPilot: changes to privileged configuration and root commands run by humans.
+## Managed by Ozenix: changes to privileged configuration and root commands run by humans.
 -w /etc/domainpilot/ -p wa -k domainpilot-config
 -w /etc/ssh/sshd_config -p wa -k sshd
 -w /etc/ssh/sshd_config.d/ -p wa -k sshd

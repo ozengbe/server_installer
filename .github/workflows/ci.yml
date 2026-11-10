@@ -39,7 +39,7 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y -qq python3-pytest
           # The runner image ships MySQL, PHP (third-party PPA), nginx and Apache.
-          # A real DomainPilot host starts clean; remove them so the test is representative.
+          # A real Ozenix host starts clean; remove them so the test is representative.
           sudo systemctl stop mysql nginx apache2 2>/dev/null || true
           sudo apt-get purge -y -qq 'mysql-*' 'php*' 'nginx*' 'apache2*' 'libapache2-*' || true
           sudo rm -f /etc/apt/sources.list.d/*ondrej* /etc/apt/sources.list.d/*php*

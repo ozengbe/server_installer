@@ -27,9 +27,7 @@ NGINX = "/usr/sbin/nginx"
 SYSTEMCTL = "/usr/bin/systemctl"
 MARIADB = "/usr/bin/mariadb"
 
-HEADER = (
-    "# Managed by DomainPilot's optimizer (`site system optimize`). Rolled back with --rollback.\n"
-)
+HEADER = "# Managed by Ozenix's optimizer (`site system optimize`). Rolled back with --rollback.\n"
 # MariaDB variables that can be changed at runtime (value in the cnf -> SET GLOBAL).
 DYNAMIC_DB: dict[str, Callable[[str], int]] = {
     "innodb_buffer_pool_size": lambda v: int(v.rstrip("M")) * 1024 * 1024,

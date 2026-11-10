@@ -82,7 +82,7 @@ def test_sshd_config_is_valid() -> None:
 
 
 def test_sudoers_valid_and_scoped() -> None:
-    # Validate DomainPilot's own file. `visudo -c` would also judge files other
+    # Validate Ozenix's own file. `visudo -c` would also judge files other
     # tools installed (e.g. CI runner images), which is not what this tests.
     result = run("/usr/sbin/visudo", "-cf", "/etc/sudoers.d/90-domainpilot", check=False)
     assert result.returncode == 0, result.stdout + result.stderr

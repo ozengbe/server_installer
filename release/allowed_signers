@@ -1,4 +1,4 @@
-# DomainPilot release signing keys (ssh-keygen -Y verify format).
+# Ozenix release signing keys (ssh-keygen -Y verify format).
 # One line per key:
 #   release@domainpilot namespaces="domainpilot-release" ssh-ed25519 AAAA... comment
 # A release is valid only if SHA256SUMS.sig verifies against a key listed here.

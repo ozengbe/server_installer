@@ -32,7 +32,7 @@
     mode: "0755"
     content: |
       #!/bin/sh
-      # Managed by DomainPilot. Runs after certbot renewed a certificate.
+      # Managed by Ozenix. Runs after certbot renewed a certificate.
       set -eu
       if /usr/sbin/nginx -t -q; then
           /usr/bin/systemctl reload nginx
@@ -68,7 +68,7 @@
     mode: "0755"
     content: |
       #!/bin/sh
-      # Managed by DomainPilot.
+      # Managed by Ozenix.
       set -eu
       umask 077
       dir=/run/domainpilot/cloudflare
@@ -88,7 +88,7 @@
     mode: "0755"
     content: |
       #!/bin/sh
-      # Managed by DomainPilot.
+      # Managed by Ozenix.
       for f in /run/domainpilot/cloudflare/*.ini; do
           [ -e "$f" ] || continue
           shred -u "$f" 2>/dev/null || rm -f "$f"

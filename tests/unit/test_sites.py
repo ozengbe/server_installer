@@ -258,7 +258,7 @@ def test_alias_and_unknown_are_rejected(system: dict[str, Any]) -> None:
     mgr.create(CreateRequest("example.com", aliases=["www.example.com"]))
     with pytest.raises(PreconditionFailed, match="alias of example.com"):
         mgr.set_enabled("www.example.com", False)
-    with pytest.raises(PreconditionFailed, match="not a DomainPilot site"):
+    with pytest.raises(PreconditionFailed, match="not an Ozenix site"):
         mgr.delete("nope.example.com", purge=False)
 
 

@@ -1,4 +1,4 @@
-# Managed by DomainPilot (role nginx). Local changes will be overwritten.
+# Managed by Ozenix (role nginx). Local changes will be overwritten.
 user nginx;
 worker_processes auto;
 worker_rlimit_nofile 65535;
@@ -73,7 +73,7 @@ http {
     # TLS defaults for every server block
     include /etc/nginx/domainpilot/snippets/tls.conf;
 
-    # Default server first, then DomainPilot-managed sites (Phase 5).
+    # Default server first, then Ozenix-managed sites (Phase 5).
     include /etc/nginx/domainpilot/default-server.conf;
     include /etc/nginx/domainpilot/sites/*.conf;
 }

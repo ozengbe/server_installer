@@ -2,7 +2,7 @@
 
 * `system audit`, `site <d> isolation audit|test`, `site <d> security` run
   against the live server and real sites, and must report no critical finding.
-* Negative tests attack DomainPilot itself, the way a malicious tenant (T2) or
+* Negative tests attack Ozenix itself, the way a malicious tenant (T2) or
   a hostile argument would: injection and traversal through the real binary,
   symlinks planted by the tenant against root's backup/restore/purge, setuid
   uploads.

@@ -1,4 +1,4 @@
-# Upgrading DomainPilot
+# Upgrading Ozenix
 
 An upgrade is the same installer run with a newer release. It is idempotent: it changes only what differs.
 
@@ -17,7 +17,7 @@ An upgrade is the same installer run with a newer release. It is idempotent: it 
    - the registry, as a consistent SQLite copy;
    - `/etc/domainpilot`, which includes the secrets. These are still encrypted with this host's key.
    - `/var/lib/domainpilot`;
-   - nginx, PHP and MariaDB configuration, SSH drop-ins, the DomainPilot AppArmor profiles and `nftables.conf`.
+   - nginx, PHP and MariaDB configuration, SSH drop-ins, the Ozenix AppArmor profiles and `nftables.conf`.
 
    Site files and databases are **not** in it. Your nightly backups cover those.
 4. **Runs the playbook.** The new CLI is installed into `/usr/lib/domainpilot/releases/<version>/`. It is test-imported there first, then `/usr/lib/domainpilot/current` is switched to it in one atomic step, so old and new code never mix. The previous two releases stay on disk.
@@ -52,9 +52,9 @@ sudo site list
 
 ## Ubuntu release upgrades (24.04 → 26.04)
 
-Don't run `do-release-upgrade` on a DomainPilot host. Major PHP, MariaDB and cache engine versions change underneath running sites. Instead:
+Don't run `do-release-upgrade` on an Ozenix host. Major PHP, MariaDB and cache engine versions change underneath running sites. Instead:
 
-1. Build a new 26.04 server with the current DomainPilot release.
+1. Build a new 26.04 server with the current Ozenix release.
 2. Recreate the sites on it.
 3. Restore them from backup ([runbooks/restore.md](runbooks/restore.md), "Move sites to a new server").
 4. Switch DNS.

@@ -86,7 +86,7 @@
     group: root
     mode: "0644"
     content: |
-      # Managed by DomainPilot
+      # Managed by Ozenix
       [Unit]
       StartLimitIntervalSec=600
       StartLimitBurst=3

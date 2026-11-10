@@ -22,6 +22,7 @@ DOCS = sorted(
         ROOT / "docs" / "install.md",
         ROOT / "docs" / "upgrade.md",
         ROOT / "docs" / "admin-guide.md",
+        ROOT / "docs" / "commands.md",
         *(ROOT / "docs" / "runbooks").glob("*.md"),
     ]
 )

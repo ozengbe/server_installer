@@ -79,7 +79,7 @@ def check(
     r.add(
         {True: "ok", False: "critical", None: "warn"}[table],
         "firewall",
-        {True: "rules loaded", False: "DomainPilot rules NOT loaded", None: "state unknown"}[table],
+        {True: "rules loaded", False: "Ozenix rules NOT loaded", None: "state unknown"}[table],
     )
     if firewall_pending:
         r.add("warn", "firewall", "a firewall change is waiting for confirmation")

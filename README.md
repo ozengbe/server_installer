@@ -1,4 +1,4 @@
-# DomainPilot Secure Server Management Platform
+# Ozenix Secure Server Management Platform
 
 A secure-by-default web server manager for Ubuntu 24.04 and 26.04 LTS: Ansible-hardened hosts, strict per-tenant isolation, and a `site` CLI.
 
@@ -7,6 +7,7 @@ A secure-by-default web server manager for Ubuntu 24.04 and 26.04 LTS: Ansible-h
 ## Documents
 For administrators:
 - [Install guide](docs/install.md): download, verify, install, first site
+- [Command reference](docs/commands.md): every command, and how isolation works
 - [Administrator guide](docs/admin-guide.md): day-to-day operation
 - [Upgrade guide](docs/upgrade.md)
 - Runbooks: [incident](docs/runbooks/incident.md), [restore](docs/runbooks/restore.md), [rollback](docs/runbooks/rollback.md), [key rotation](docs/runbooks/key-rotation.md)

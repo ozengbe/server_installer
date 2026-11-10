@@ -1,5 +1,5 @@
 ---
-- name: DomainPilot groups
+- name: Ozenix groups
   ansible.builtin.group:
     name: "{{ item }}"
     system: true

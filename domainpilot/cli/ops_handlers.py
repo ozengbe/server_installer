@@ -203,7 +203,7 @@ def system_update(ctx: Context, args: argparse.Namespace) -> CommandResult:
     report = _health_report(ctx)
     lines.append(f"Health after update: {report.worst}")
     if result["reboot_required"]:
-        ctx.out.warn("a reboot is required (DomainPilot never reboots on its own)")
+        ctx.out.warn("a reboot is required (Ozenix never reboots on its own)")
     result["health"] = health_mod.as_dict(report)
     return CommandResult(result, lines)
 

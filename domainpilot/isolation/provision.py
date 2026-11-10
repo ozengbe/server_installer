@@ -112,7 +112,7 @@ class Provisioner:
         for d in self.directories(spec):
             if d.path.parent not in ours and not d.path.parent.is_dir():
                 raise PreconditionFailed(
-                    f"{d.path.parent} is missing", hint="run the DomainPilot installer first"
+                    f"{d.path.parent} is missing", hint="run the Ozenix installer first"
                 )
 
     def _ids(self, spec: TenantSpec, owner: str) -> tuple[int, int]:
@@ -237,7 +237,7 @@ class Provisioner:
                     "--shell",
                     NOLOGIN,
                     "--comment",
-                    f"DomainPilot tenant {t} runtime",
+                    f"Ozenix tenant {t} runtime",
                     t,
                 ),
                 self._cmd("/usr/sbin/userdel", t),
@@ -257,7 +257,7 @@ class Provisioner:
                     "--shell",
                     NOLOGIN,
                     "--comment",
-                    f"DomainPilot tenant {t} deploy",
+                    f"Ozenix tenant {t} deploy",
                     spec.deploy_user,
                 ),
                 self._cmd("/usr/sbin/userdel", spec.deploy_user),

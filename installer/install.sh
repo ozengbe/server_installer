@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# DomainPilot installer: fresh installs and upgrades (docs/install.md, docs/upgrade.md).
+# Ozenix installer: fresh installs and upgrades (docs/install.md, docs/upgrade.md).
 #
 #   sudo installer/install.sh [--vars FILE] [--check] [--yes] [--allow-downgrade] [-- EXTRA-ANSIBLE-ARGS]
 #
@@ -10,7 +10,7 @@
 #   --allow-downgrade  install an older release (see docs/runbooks/rollback.md)
 #
 # Run it via sudo from the admin account you SSH in with. That account becomes
-# the first DomainPilot admin, so hardening cannot lock you out.
+# the first Ozenix admin, so hardening cannot lock you out.
 set -euo pipefail
 umask 027
 export PATH=/usr/sbin:/usr/bin:/sbin:/bin LC_ALL=C.UTF-8
@@ -70,7 +70,7 @@ operator_ip() {
 generate_vars() {
   local user="${SUDO_USER:-}"
   [[ -n $user && $user != root ]] || die "no $VARS found and not run via sudo from an admin account; create $VARS (see ansible/group_vars/all.yml)"
-  [[ $user =~ ^[a-z][a-z0-9_-]{0,30}$ ]] || die "account name '$user' is not a valid DomainPilot admin name"
+  [[ $user =~ ^[a-z][a-z0-9_-]{0,30}$ ]] || die "account name '$user' is not a valid Ozenix admin name"
   local home keyfile
   home="$(getent passwd "$user" | cut -d: -f6)"
   if [[ -s /etc/ssh/authorized_keys.d/$user ]]; then keyfile=/etc/ssh/authorized_keys.d/$user
@@ -86,7 +86,7 @@ generate_vars() {
   local admin_ip
   admin_ip="$(operator_ip)"
 
-  info "First run: '$user' becomes the first DomainPilot admin with ${#keys[@]} key(s) from $keyfile."
+  info "First run: '$user' becomes the first Ozenix admin with ${#keys[@]} key(s) from $keyfile."
   info "After hardening: SSH is key-only, root login is disabled, and only dp-admins can log in."
   if [[ -n $admin_ip ]]; then
     info "Your SSH source address $admin_ip will never be banned by fail2ban (dp_fail2ban_ignoreip)."
@@ -142,16 +142,16 @@ fi
 PLAN="$(release_py plan "$RELEASE_JSON" "${DOWNGRADE[@]}")" || exit 3
 read -r ACTION FROM_VERSION TO_VERSION <<<"$PLAN"
 case "$ACTION" in
-  fresh) info "Installing DomainPilot $TO_VERSION" ;;
-  reinstall) info "Re-applying DomainPilot $TO_VERSION" ;;
+  fresh) info "Installing Ozenix $TO_VERSION" ;;
+  reinstall) info "Re-applying Ozenix $TO_VERSION" ;;
   upgrade|downgrade)
-    info "${ACTION^}: DomainPilot $FROM_VERSION -> $TO_VERSION (read docs/upgrade.md first)"
+    info "${ACTION^}: Ozenix $FROM_VERSION -> $TO_VERSION (read docs/upgrade.md first)"
     [[ ${#CHECK[@]} -gt 0 ]] || confirm "Continue?" || die "aborted"
     ;;
   *) die "unexpected upgrade plan: $PLAN" ;;
 esac
 
-# Everything needed to roll back DomainPilot's own state: registry (copied
+# Everything needed to roll back Ozenix's own state: registry (copied
 # consistently with SQLite's online backup), settings, secrets, generated
 # configs. Root-only; the newest 5 are kept.
 snapshot_state() {
@@ -205,7 +205,7 @@ ansible-playbook -i localhost, -c local "$REPO/ansible/site.yml" \
 if [[ ${#CHECK[@]} -eq 0 ]]; then
   release_py record "$RELEASE_JSON" "$STATE_DIR/release-history.jsonl" "$COMMIT" \
     || die "installed, but could not record the release in $RELEASE_JSON"
-  info "DomainPilot $TO_VERSION ($COMMIT) is installed."
+  info "Ozenix $TO_VERSION ($COMMIT) is installed."
 fi
 
 if [[ -e /var/lib/domainpilot/firewall/pending ]]; then

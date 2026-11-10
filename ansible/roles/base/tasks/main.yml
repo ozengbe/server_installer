@@ -31,7 +31,7 @@
         state: started
       when: ansible_facts['virtualization_type'] not in ['docker', 'container', 'containerd', 'lxc', 'podman']
 
-- name: Create DomainPilot directories
+- name: Create Ozenix directories
   ansible.builtin.file:
     path: "{{ item.path }}"
     state: directory
@@ -54,7 +54,7 @@
     group: root
     mode: "0644"
     content: |
-      # Managed by DomainPilot
+      # Managed by Ozenix
       [Journal]
       Storage=persistent
       Compress=yes
@@ -81,7 +81,7 @@
         group: root
         mode: "0644"
         content: |
-          // Managed by DomainPilot: debconf executes extracted config scripts; /tmp is noexec.
+          // Managed by Ozenix: debconf executes extracted config scripts; /tmp is noexec.
           APT::ExtractTemplates::TempDir "/var/tmp";
     - name: Install tmp.mount unit
       ansible.builtin.copy:

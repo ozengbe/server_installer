@@ -1,7 +1,7 @@
-# Managed by DomainPilot. Sandbox for one tenant's cache server (Valkey/Redis),
+# Managed by Ozenix. Sandbox for one tenant's cache server (Valkey/Redis),
 # unix socket only. Per-tenant settings: dp-cache@<tenant>.service.d/10-tenant.conf
 [Unit]
-Description=DomainPilot cache for tenant %i
+Description=Ozenix cache for tenant %i
 After=network.target
 ConditionPathExists=/etc/domainpilot/tenants/%i/cache.conf
 StartLimitIntervalSec=300

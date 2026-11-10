@@ -55,7 +55,7 @@
         group: root
         mode: "0644"
         content: |
-          # Managed by DomainPilot (role monitoring). Loopback only: reach it via
+          # Managed by Ozenix (role monitoring). Loopback only: reach it via
           # an SSH tunnel or WireGuard. The firewall blocks 9100 regardless.
           ARGS="--web.listen-address=127.0.0.1:9100"
       register: monitoring_exporter_conf

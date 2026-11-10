@@ -61,7 +61,7 @@ def site_status(ctx: Context, _args: argparse.Namespace) -> CommandResult:
     site = registry.get_site(ctx.domain) if registry else None
     if site is None or registry is None:
         raise PreconditionFailed(
-            f"{ctx.domain} is not a DomainPilot site",
+            f"{ctx.domain} is not an Ozenix site",
             hint=f"create it with: sudo site {ctx.domain} create",
         )
     tenant = registry.get_tenant(site.tenant_id)
@@ -110,7 +110,7 @@ def system_status(ctx: Context, _args: argparse.Namespace) -> CommandResult:
         if state != "active":
             ctx.out.warn(f"service {name} is {state}")
     if firewall["table_present"] is False:
-        ctx.out.warn("DomainPilot firewall table is not loaded")
+        ctx.out.warn("Ozenix firewall table is not loaded")
     if firewall["change_pending"]:
         ctx.out.warn("a firewall change is waiting for confirmation (sudo dp-firewall confirm)")
     if reboot:

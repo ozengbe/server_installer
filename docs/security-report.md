@@ -1,4 +1,4 @@
-# DomainPilot — Security Validation Report (Phase 9)
+# Ozenix — Security Validation Report (Phase 9)
 
 Status: **preview**. Release gate #6 (a review of the root-run code paths by someone other than the author) is still open. Until it closes, this report is the author's own validation, not an independent assessment.
 
@@ -12,7 +12,7 @@ Status: **preview**. Release gate #6 (a review of the root-run code paths by som
 | Site confinement (configured) | `site <d> isolation audit`: systemd sandbox properties as systemd applies them, exposure score ≤ 2.0, AppArmor mode, cgroup limits, directory owners and modes, database grants, account hygiene | `domainpilot/security/site_audit.py` |
 | Site confinement (proven) | `site <d> isolation test`: escape attempts from **inside** the live site's PHP sandbox (other sites' files, sockets, processes and databases, host secrets, metadata, loopback, private networks, exec) | `domainpilot/security/isolation_test.py`, `isolation/probe.php` |
 | Site hygiene | `site <d> security`: the above, plus world-writable files, setuid, secrets in the web root, symlinks leaving the site, PHP settings, certificate, SFTP keys, backups | same |
-| DomainPilot itself | Negative tests: injection and traversal through the real binary, symlinks planted by tenants against root's backup, restore and purge, setuid uploads, privilege checks | `tests/integration/test_phase9_security.py`, `tests/security/` |
+| Ozenix itself | Negative tests: injection and traversal through the real binary, symlinks planted by tenants against root's backup, restore and purge, setuid uploads, privilege checks | `tests/integration/test_phase9_security.py`, `tests/security/` |
 | Recovery | Firewall auto-rollback, crash-and-repair at every creation step, restore drill, crash → bounded restart → alert | phases 2a, 5 and 8 integration suites |
 | Release integrity (Phase 10) | Reproducible tarball, SSH-signed `SHA256SUMS`, per-file `MANIFEST.sha256` re-checked by the installer on every run (tampered tree refused), downgrade refusal, root-only pre-upgrade snapshot, versioned code directories switched atomically | `tools/release.sh`, `installer/install.sh`, `tests/unit/test_phase10.py`, `tests/integration/test_phase10_release.py` |
 | Key rotation (Phase 10) | Backup master key rotated in two idempotent steps against real restic; old key removed only after the new one opens every repository | same |

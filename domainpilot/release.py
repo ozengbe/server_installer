@@ -58,7 +58,7 @@ class Version:
     def parse(cls, text: str) -> Version:
         m = _VERSION_RE.fullmatch(text.strip())
         if not m:
-            raise VersionError(f"not a DomainPilot version: {text!r}")
+            raise VersionError(f"not an Ozenix version: {text!r}")
         major, minor, patch = (int(m.group(i)) for i in (1, 2, 3))
         if m.group(4):
             return cls(major, minor, patch, 1, int(m.group(5)))

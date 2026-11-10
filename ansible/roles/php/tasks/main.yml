@@ -4,7 +4,7 @@
     name: "{{ php_packages }}"
     state: present
 
-# The distro service runs ONE shared pool as www-data. DomainPilot runs one
+# The distro service runs ONE shared pool as www-data. Ozenix runs one
 # sandboxed master per tenant instead (Phase 4), so the shared one is masked
 # (package upgrades cannot restart it either).
 - name: Stop and mask the shared PHP-FPM service
@@ -21,7 +21,7 @@
     group: root
     mode: "0644"
     content: |
-      ; Managed by DomainPilot (role php)
+      ; Managed by Ozenix (role php)
       expose_php = Off
       display_errors = Off
       display_startup_errors = Off

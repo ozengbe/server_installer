@@ -1,6 +1,6 @@
-# Managed by DomainPilot (role monitoring).
+# Managed by Ozenix (role monitoring).
 [Unit]
-Description=DomainPilot self-monitoring every 5 minutes
+Description=Ozenix self-monitoring every 5 minutes
 
 [Timer]
 OnBootSec=2min

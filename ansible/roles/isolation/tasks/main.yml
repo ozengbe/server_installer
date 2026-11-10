@@ -25,7 +25,7 @@
     group: root
     mode: "0644"
     content: |
-      # Managed by DomainPilot
+      # Managed by Ozenix
       d /run/domainpilot 0711 root root -
 
 - name: Parent slice for all tenants
@@ -35,9 +35,9 @@
     group: root
     mode: "0644"
     content: |
-      # Managed by DomainPilot: all tenant workloads live below this slice.
+      # Managed by Ozenix: all tenant workloads live below this slice.
       [Unit]
-      Description=DomainPilot tenants
+      Description=Ozenix tenants
       Before=slices.target
 
       [Slice]

@@ -131,7 +131,7 @@ class BackupManager:
     def tenant_for(self, domain: str) -> Tenant:
         site = self.registry.get_site(domain)
         if site is None:
-            raise PreconditionFailed(f"{domain} is not a DomainPilot site")
+            raise PreconditionFailed(f"{domain} is not an Ozenix site")
         tenant = self.registry.get_tenant(site.tenant_id)
         if tenant is None or tenant.status not in ("active", "archived"):
             raise PreconditionFailed(f"{domain} has no active tenant to back up")

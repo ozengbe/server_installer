@@ -1,4 +1,4 @@
-# DomainPilot — Threat Model (Phase 1 draft)
+# Ozenix — Threat Model (Phase 1 draft)
 
 Status: **PROPOSED**. Method: asset- and trust-boundary-based, with STRIDE applied at each boundary. This is revisited at the end of every phase.
 
@@ -73,7 +73,7 @@ Status: **PROPOSED**. Method: asset- and trust-boundary-based, with STRIDE appli
 | RR-2 | Shared nginx and MariaDB processes: a 0-day in either crosses tenant boundaries. | Accepted for density; patch quickly. |
 | RR-3 | CPU micro-architectural side channels between tenants. | Accepted; kernel mitigations stay at defaults (never `mitigations=off`). |
 | RR-4 | A bug in the root-run CLI is a privilege-escalation path for whoever can feed it data (tenant file names, restored archives). | Mitigated by design rules (architecture §5) and negative tests; needs an external review before GA. |
-| RR-5 | Compromised admin workstation (T4). | Out of DomainPilot's control. Recommend hardware-backed SSH keys (FIDO2 `sk-ed25519`) and WireGuard-only admin access. |
+| RR-5 | Compromised admin workstation (T4). | Out of Ozenix's control. Recommend hardware-backed SSH keys (FIDO2 `sk-ed25519`) and WireGuard-only admin access. |
 | RR-6 | Cloudflare account compromise. | Out of scope; recommend 2FA/SSO and token IP restrictions. |
 
 ## 6. Statement

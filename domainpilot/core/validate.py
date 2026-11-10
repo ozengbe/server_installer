@@ -96,7 +96,7 @@ def tenant_id(value: str) -> str:
 
 def username(value: str) -> str:
     if not isinstance(value, str) or not _USERNAME_RE.fullmatch(value):
-        raise ValidationError(f"invalid DomainPilot username {value!r}")
+        raise ValidationError(f"invalid Ozenix username {value!r}")
     return value
 
 

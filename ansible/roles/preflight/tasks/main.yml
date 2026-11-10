@@ -5,7 +5,7 @@
       - ansible_facts['distribution'] == 'Ubuntu'
       - ansible_facts['distribution_version'] in dp_supported_releases
     fail_msg: >-
-      DomainPilot supports Ubuntu {{ dp_supported_releases | join(' and ') }} LTS only
+      Ozenix supports Ubuntu {{ dp_supported_releases | join(' and ') }} LTS only
       (found {{ ansible_facts['distribution'] }} {{ ansible_facts['distribution_version'] }}).
 
 - name: Require systemd and cgroup v2

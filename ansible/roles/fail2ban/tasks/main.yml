@@ -17,7 +17,7 @@
 
 - name: Apply fail2ban configuration with validation and restore on failure
   block:
-    - name: DomainPilot jails
+    - name: Ozenix jails
       ansible.builtin.template:
         src: domainpilot.local.j2
         dest: /etc/fail2ban/jail.d/domainpilot.local

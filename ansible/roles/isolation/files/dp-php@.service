@@ -1,8 +1,8 @@
-# Managed by DomainPilot. Sandbox for one tenant's PHP-FPM master (architecture §4.4).
+# Managed by Ozenix. Sandbox for one tenant's PHP-FPM master (architecture §4.4).
 # Per-tenant settings (PHP version, slice) come from the drop-in written by `site`:
 #   /etc/systemd/system/dp-php@<tenant>.service.d/10-tenant.conf
 [Unit]
-Description=DomainPilot PHP-FPM for tenant %i
+Description=Ozenix PHP-FPM for tenant %i
 After=network.target mariadb.service dp-cache@%i.service
 Wants=dp-cache@%i.service
 ConditionPathExists=/etc/domainpilot/tenants/%i/php-fpm.conf

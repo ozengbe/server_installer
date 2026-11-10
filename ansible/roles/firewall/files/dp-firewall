@@ -1,5 +1,5 @@
 #!/bin/bash
-# dp-firewall - apply DomainPilot nftables changes with automatic rollback.
+# dp-firewall - apply Ozenix nftables changes with automatic rollback.
 #
 #   dp-firewall apply FILE [--timeout SECONDS]   validate, apply, arm rollback timer
 #   dp-firewall confirm                          keep the change and persist it

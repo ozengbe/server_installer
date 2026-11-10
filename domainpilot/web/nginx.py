@@ -1,4 +1,4 @@
-"""nginx virtual hosts for DomainPilot sites.
+"""nginx virtual hosts for Ozenix sites.
 
 Every change is validated with ``nginx -t`` *before* nginx is reloaded; if
 validation fails the previous file is restored (or the new one removed) and

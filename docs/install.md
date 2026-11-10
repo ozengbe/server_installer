@@ -1,4 +1,4 @@
-# Installing DomainPilot
+# Installing Ozenix
 
 > **Preview release.** Read [security-report.md](security-report.md) §4 for the known limits. Install on a server that hosts nothing else.
 
@@ -57,7 +57,7 @@ sudo site system health
 sudo site system security            # exit 0 = all clear, 10 = warnings, 11 = critical
 ```
 
-**2. Point DNS at the server.** At your DNS provider, create `A` (IPv4) and, if the server has IPv6, `AAAA` records for `example.com` and `www.example.com` with the server's address. With Cloudflare, the proxy (orange cloud) can be on or off. DomainPilot does not create or change DNS records.
+**2. Point DNS at the server.** At your DNS provider, create `A` (IPv4) and, if the server has IPv6, `AAAA` records for `example.com` and `www.example.com` with the server's address. With Cloudflare, the proxy (orange cloud) can be on or off. Ozenix does not create or change DNS records.
 
 **3. Create the site:**
 
@@ -129,7 +129,7 @@ For remote Ansible runs, set `dp_firewall_confirm_mode: remote`. Ansible then re
 
 ## Rollback / recovery
 - **Firewall:** `sudo dp-firewall rollback` while a change is pending. Otherwise re-run the installer with corrected vars. As a last resort from the provider console: `sudo nft delete table inet domainpilot` (opens the host).
-- **SSH:** the installer validates with `sshd -t` and restores the previous drop-in if validation fails. To revert by hand from the console, delete `/etc/ssh/sshd_config.d/00-domainpilot.conf` and the `DomainPilot managed block` in `/etc/ssh/sshd_config`, then run `systemctl reload ssh`.
+- **SSH:** the installer validates with `sshd -t` and restores the previous drop-in if validation fails. To revert by hand from the console, delete `/etc/ssh/sshd_config.d/00-domainpilot.conf` and the `Ozenix managed block` in `/etc/ssh/sshd_config`, then run `systemctl reload ssh`.
 - **sysctl:** delete `/etc/sysctl.d/99-zz-domainpilot.conf` and reboot. Some settings, such as `kexec_load_disabled`, can't be undone without a reboot.
 - **/tmp hardening:** `systemctl disable tmp.mount`, then reboot.
 
@@ -149,7 +149,7 @@ Health check: `sudo dp-healthcheck` (or `--json`). It runs automatically after e
 
 **Updates that are deliberately not automatic:** nginx.org releases, PHP minor/major versions, MariaDB major versions, and kernel reboots. Run them in a maintenance window with `sudo site system update`. MariaDB is never restarted by needrestart.
 
-**Rollback:** every service config change is validated (`nginx -t`, `fail2ban-client --test`, MariaDB start) and the previous file is restored if validation fails. To remove a service's DomainPilot config by hand, delete the file named in its "Managed by DomainPilot" header and restart the service.
+**Rollback:** every service config change is validated (`nginx -t`, `fail2ban-client --test`, MariaDB start) and the previous file is restored if validation fails. To remove a service's Ozenix config by hand, delete the file named in its "Managed by Ozenix" header and restart the service.
 
 ## Locked out by fail2ban
 

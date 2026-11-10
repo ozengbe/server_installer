@@ -121,7 +121,7 @@ def check_firewall(view: HostView, rep: SecurityReport) -> None:
     rep.add(
         "FW-TABLE",
         chain is not None,
-        "DomainPilot firewall rules are loaded",
+        "Ozenix firewall rules are loaded",
         fix="sudo systemctl restart nftables",
         threats=("TH4", "TH5", "TH20"),
     )

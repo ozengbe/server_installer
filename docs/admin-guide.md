@@ -1,6 +1,6 @@
-# DomainPilot administrator guide
+# Ozenix administrator guide
 
-This guide is for the people who run a DomainPilot server day to day. First-time setup is covered in [install.md](install.md). For emergencies, use the [runbooks](#runbooks).
+This guide is for the people who run an Ozenix server day to day. First-time setup is covered in [install.md](install.md). For emergencies, use the [runbooks](#runbooks).
 
 ## 1. What runs where
 
@@ -83,9 +83,9 @@ sudo site example.com ssl              # request Let's Encrypt now
 sudo site example.com create --no-ssl  # only the placeholder, never Let's Encrypt
 ```
 
-**Cloudflare without any setup on the server.** Create the DNS records in Cloudflare yourself, with the proxy on, and set SSL/TLS mode to **Full**. Switch to **Full (strict)** once `ssl status` shows Let's Encrypt. DomainPilot never creates, changes or deletes DNS records unless you ask it to.
+**Cloudflare without any setup on the server.** Create the DNS records in Cloudflare yourself, with the proxy on, and set SSL/TLS mode to **Full**. Switch to **Full (strict)** once `ssl status` shows Let's Encrypt. Ozenix never creates, changes or deletes DNS records unless you ask it to.
 
-**Optional: let DomainPilot manage the records.** With a stored API token, DomainPilot can:
+**Optional: let Ozenix manage the records.** With a stored API token, Ozenix can:
 - create the proxied records itself (`create --cloudflare-dns`);
 - validate certificates through DNS;
 - review the zone's security settings read-only.
@@ -96,7 +96,7 @@ sudo site example.com create --cloudflare-dns
 sudo site example.com cloudflare security           # read-only review of the zone's settings
 ```
 
-The token needs `Zone - DNS - Edit` and `Zone - Zone Settings - Read`. DomainPilot never changes zone settings, and it only deletes DNS records it created itself.
+The token needs `Zone - DNS - Edit` and `Zone - Zone Settings - Read`. Ozenix never changes zone settings, and it only deletes DNS records it created itself.
 
 ## 5. Backups
 
@@ -124,7 +124,7 @@ Restoring, and moving sites to a new server: [runbooks/restore.md](runbooks/rest
 | Ubuntu security updates | Automatic, daily at `dp_updates_window_start`. Never reboots. |
 | Everything else (nginx.org releases, PHP minor versions, kernel) | `sudo site system update --check`, then `sudo site system update` in a maintenance window |
 | Reboot | When `site system health` reports `reboot-required`, in a window you choose |
-| DomainPilot itself | [upgrade.md](upgrade.md) |
+| Ozenix itself | [upgrade.md](upgrade.md) |
 
 ```bash
 sudo site system update --history
@@ -154,8 +154,8 @@ The firewall allows only 22, 80 and 443. Changes are applied with an automatic r
 ## 9. Logs
 
 ```bash
-sudo site system logs --audit -n 50       # who did what with DomainPilot
-sudo site system logs --errors            # warnings and errors from DomainPilot's services
+sudo site system logs --audit -n 50       # who did what with Ozenix
+sudo site system logs --errors            # warnings and errors from Ozenix's services
 sudo site example.com logs --php          # one site's PHP errors
 ```
 

@@ -225,7 +225,7 @@ def _alerts_setup_args(p: argparse.ArgumentParser) -> None:
 
 
 def _logs_system_args(p: argparse.ArgumentParser) -> None:
-    p.add_argument("--audit", action="store_true", help="DomainPilot audit events")
+    p.add_argument("--audit", action="store_true", help="Ozenix audit events")
     p.add_argument("--errors", action="store_true", help="warnings and errors only")
     p.add_argument("-n", "--lines", type=int, default=100)
 

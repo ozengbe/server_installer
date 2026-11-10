@@ -13,7 +13,7 @@ Find the scope. The questions below are in order of severity.
 ```bash
 sudo site system security               # problems only; exit 11 = critical findings
 sudo site system logs --errors -n 200
-sudo site system logs --audit -n 100    # every privileged DomainPilot action, with who ran it
+sudo site system logs --audit -n 100    # every privileged Ozenix action, with who ran it
 sudo site list
 ```
 
@@ -70,7 +70,7 @@ sudo site list
 
 ## 2. The server
 
-Assume root is compromised. Anything on this server, including DomainPilot's own reports, may be lying.
+Assume root is compromised. Anything on this server, including Ozenix's own reports, may be lying.
 
 1. **Contain at the provider**, not on the host. Use its firewall to allow SSH only from your address, or take a snapshot and power the server off.
 2. **Preserve evidence.** Take a provider disk snapshot **before** you change anything.

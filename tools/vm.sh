@@ -5,7 +5,7 @@
 #   tools/vm.sh test  [name]   copy the working tree in and run integration tests as root
 #   tools/vm.sh shell [name]   open a shell
 #   tools/vm.sh down  [name]   delete and purge the VM
-#   tools/vm.sh list           list DomainPilot test VMs
+#   tools/vm.sh list           list Ozenix test VMs
 #
 # Safety: only VMs whose name starts with "dp-test-" can be touched.
 set -euo pipefail

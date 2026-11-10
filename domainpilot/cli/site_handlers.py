@@ -128,7 +128,7 @@ def logs(ctx: Context, args: argparse.Namespace) -> CommandResult:
     registry = ctx.registry(create=False)
     site = registry.get_site(_domain(ctx)) if registry else None
     if site is None:
-        raise PreconditionFailed(f"{ctx.domain} is not a DomainPilot site")
+        raise PreconditionFailed(f"{ctx.domain} is not an Ozenix site")
     lines = args.lines
     if not 1 <= lines <= MAX_LOG_LINES:
         raise UsageError(f"--lines must be between 1 and {MAX_LOG_LINES}")
@@ -151,7 +151,7 @@ def _tenant_of(ctx: Context) -> tuple[Registry, str]:
     registry = ctx.registry(create=False)
     site = registry.get_site(_domain(ctx)) if registry else None
     if site is None or registry is None:
-        raise PreconditionFailed(f"{ctx.domain} is not a DomainPilot site")
+        raise PreconditionFailed(f"{ctx.domain} is not an Ozenix site")
     return registry, site.tenant_id
 
 

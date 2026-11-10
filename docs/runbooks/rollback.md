@@ -9,7 +9,7 @@ Find the row that matches what went wrong. Start at the top: the cheapest fixes 
 | `site system optimize --apply` | `sudo site system optimize --history`, then `sudo site system optimize --rollback <ID>` |
 | A PHP version change broke the site | `sudo site example.com php <previous version>` |
 | A bad restore | The replaced tree is kept next to the staging copy (see [restore.md](restore.md#undo-a-restore)) |
-| A DomainPilot upgrade broke something | [§ Upgrade](#upgrade) |
+| An Ozenix upgrade broke something | [§ Upgrade](#upgrade) |
 
 Every rollback is written to the audit log: `sudo site system logs --audit`.
 
@@ -19,7 +19,7 @@ Pending changes roll back automatically. To roll back right away, run `sudo dp-f
 
 If a **confirmed** change locks you out:
 1. Log in through the provider console.
-2. Run `sudo nft delete table inet domainpilot`. This removes DomainPilot's firewall and leaves the host **open**.
+2. Run `sudo nft delete table inet domainpilot`. This removes Ozenix's firewall and leaves the host **open**.
 3. Fix `/etc/domainpilot/install.yml`, then run `sudo installer/install.sh`.
 4. Confirm from a new SSH session.
 
@@ -38,7 +38,7 @@ If a **confirmed** change locks you out:
       ```bash
       sudo systemctl stop dp-backup.timer dp-monitor.timer
       ```
-   3. Restore the pre-upgrade snapshot. This replaces DomainPilot's state with the copy taken just before the upgrade.
+   3. Restore the pre-upgrade snapshot. This replaces Ozenix's state with the copy taken just before the upgrade.
       ```bash
       SNAP=/var/backups/domainpilot/pre-upgrade-<from>-to-<to>-<time>.tar.gz
       sudo tar -tzf "$SNAP" | head          # look first
@@ -70,4 +70,4 @@ Do the backup **before** step 3 if you can.
 
 ## Configuration file by hand
 
-Every file DomainPilot writes has a `Managed by DomainPilot` header. Your edits are overwritten by the next install. Put lasting changes in `/etc/domainpilot/install.yml`, then run `sudo installer/install.sh`.
+Every file Ozenix writes has a `Managed by Ozenix` header. Your edits are overwritten by the next install. Put lasting changes in `/etc/domainpilot/install.yml`, then run `sudo installer/install.sh`.
