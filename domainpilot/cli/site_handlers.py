@@ -53,6 +53,7 @@ def create(ctx: Context, args: argparse.Namespace) -> CommandResult:
         upstream=args.upstream,
         writable_code=args.writable_code,
         cloudflare=not getattr(args, "no_cloudflare", False),
+        tenant_id=getattr(args, "tenant_id", None),
     )
     result = _manager(ctx).create(req)
     if result["dry_run"]:

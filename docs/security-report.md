@@ -14,6 +14,9 @@ Status: **preview**. Release gate #6 (a review of the root-run code paths by som
 | Site hygiene | `site <d> security`: the above, plus world-writable files, setuid, secrets in the web root, symlinks leaving the site, PHP settings, certificate, SFTP keys, backups | same |
 | DomainPilot itself | Negative tests: injection and traversal through the real binary, symlinks planted by tenants against root's backup, restore and purge, setuid uploads, privilege checks | `tests/integration/test_phase9_security.py`, `tests/security/` |
 | Recovery | Firewall auto-rollback, crash-and-repair at every creation step, restore drill, crash → bounded restart → alert | phases 2a, 5 and 8 integration suites |
+| Release integrity (Phase 10) | Reproducible tarball, SSH-signed `SHA256SUMS`, per-file `MANIFEST.sha256` re-checked by the installer on every run (tampered tree refused), downgrade refusal, root-only pre-upgrade snapshot, versioned code directories switched atomically | `tools/release.sh`, `installer/install.sh`, `tests/unit/test_phase10.py`, `tests/integration/test_phase10_release.py` |
+| Key rotation (Phase 10) | Backup master key rotated in two idempotent steps against real restic; old key removed only after the new one opens every repository | same |
+| Operator docs (Phase 10) | Every `site …` command in the install guide, admin guide and runbooks is parsed against the real CLI grammar | `tests/unit/test_docs_commands.py` |
 
 All suites run on a disposable Ubuntu 26.04 host (`/etc/domainpilot-test-vm`). CI runs 24.04.
 

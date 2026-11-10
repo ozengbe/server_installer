@@ -16,6 +16,7 @@ from domainpilot.backup.config import (
     validate_repository,
 )
 from domainpilot.backup.manager import BackupManager
+from domainpilot.backup.restic import validate_snapshot_id
 from domainpilot.cli.context import CommandResult, Context
 from domainpilot.cli.site_handlers import HIDDEN, _domain
 from domainpilot.core.errors import ExitCode, OperationFailed, UsageError
@@ -122,6 +123,57 @@ def import_key(ctx: Context, _args: argparse.Namespace) -> CommandResult:
     settings.import_master(_read_stdin("Master key (input hidden): "))
     ctx.audit().record("backup.import_key", argv=ctx.argv, outcome="success", details={})
     return CommandResult({"imported": True}, ["Master key imported."])
+
+
+def rotate_key(ctx: Context, args: argparse.Namespace) -> CommandResult:
+    """Two steps so the old key never disappears before the new one is stored offline."""
+    manager = _manager(ctx)
+    if args.finish:
+        data = manager.finish_rotation()
+        lines = [f"  {name}: {what}" for name, what in data["repositories"].items()]
+        return CommandResult(
+            data,
+            [
+                "Old key removed from every repository. Destroy offline copies of the OLD key.",
+                *lines,
+            ],
+        )
+    if not _show_secret(ctx, args):
+        raise UsageError(
+            "rotation prints the new master key: run it in a terminal or add --show-secret"
+        )
+    data = manager.rotate_key()
+    key = _settings(ctx).secrets.load("master").strip()
+    lines = [f"  {name}: {what}" for name, what in data["repositories"].items()]
+    return CommandResult(
+        {**data, "master_key": key},
+        [
+            "New key added to every repository and now in use. The old key still works.",
+            *lines,
+            "",
+            f"New master key: {key}",
+            "",
+            KEY_WARNING,
+            "Then remove the old key: sudo site system backup rotate-key --finish",
+        ],
+    )
+
+
+def recorded_sites(ctx: Context, args: argparse.Namespace) -> CommandResult:
+    """Disaster recovery: what the lost server hosted, and under which tenant ids."""
+    snapshot = validate_snapshot_id(args.snapshot) if args.snapshot else None
+    data = _manager(ctx).recorded_sites(snapshot)
+    lines = [f"Sites in server backup {data['snapshot']} ({data['time']}):"]
+    for s in data["sites"]:
+        role = "" if s["primary"] else " (alias)"
+        lines.append(f"  {s['tenant']}  {s['domain']}{role}  {s['type']}  {s['status']}")
+    lines += [
+        "",
+        "Recreate each primary domain with its id, then restore it:",
+        "  sudo site <domain> create --type <type> --tenant-id <tNNNN>",
+        "  sudo site <domain> restore --all --confirm <domain>",
+    ]
+    return CommandResult(data, lines)
 
 
 # --- backups ----------------------------------------------------------------------------

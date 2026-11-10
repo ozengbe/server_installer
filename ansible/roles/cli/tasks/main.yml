@@ -2,19 +2,28 @@
 # Installs the `site` CLI. Everything is root-owned and not writable by
 # anyone else: the CLI runs as root, so its code must be as protected as the
 # system itself.
+#
+# Upgrade path (docs/upgrade.md): each release gets its own directory
+# /usr/lib/domainpilot/releases/<version>, and /usr/lib/domainpilot/current
+# is switched to it with one atomic symlink replacement. Old and new modules
+# never mix, and the previous release stays on disk for diagnosis.
 
-- name: Package directory
+- name: Package directories
   ansible.builtin.file:
-    path: /usr/lib/domainpilot
+    path: "{{ item }}"
     state: directory
     owner: root
     group: root
     mode: "0755"
+  loop:
+    - /usr/lib/domainpilot
+    - /usr/lib/domainpilot/releases
+    - "/usr/lib/domainpilot/releases/{{ dp_version }}"
 
 - name: Install the DomainPilot Python package
   ansible.builtin.copy:
     src: "{{ playbook_dir }}/../domainpilot/"
-    dest: /usr/lib/domainpilot/domainpilot/
+    dest: "/usr/lib/domainpilot/releases/{{ dp_version }}/domainpilot/"
     owner: root
     group: root
     mode: "u=rwX,go=rX"
@@ -22,7 +31,7 @@
 
 - name: Remove bytecode copied from a development tree
   ansible.builtin.find:
-    paths: /usr/lib/domainpilot/domainpilot
+    paths: "/usr/lib/domainpilot/releases/{{ dp_version }}/domainpilot"
     patterns: __pycache__
     file_type: directory
     recurse: true
@@ -37,6 +46,27 @@
   loop_control:
     label: "{{ item.path }}"
 
+- name: Verify the new release imports before switching to it
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/python3
+      - -IB
+      - -c
+      - "import sys; sys.path.insert(0, sys.argv[1]); import domainpilot.cli.main, domainpilot.release; print(domainpilot.__version__)"
+      - "/usr/lib/domainpilot/releases/{{ dp_version }}"
+  register: cli_import
+  changed_when: false
+  failed_when: cli_import.rc != 0 or cli_import.stdout != dp_version
+
+- name: Switch to this release (atomic symlink replacement)
+  ansible.builtin.file:
+    src: "releases/{{ dp_version }}"
+    dest: /usr/lib/domainpilot/current
+    state: link
+    force: true
+    owner: root
+    group: root
+
 - name: Install the site command
   ansible.builtin.copy:
     src: "{{ playbook_dir }}/../bin/site"
@@ -44,6 +74,27 @@
     owner: root
     group: root
     mode: "0755"
+
+- name: Remove the pre-0.10 package location
+  ansible.builtin.file:
+    path: /usr/lib/domainpilot/domainpilot
+    state: absent
+
+- name: List installed releases
+  ansible.builtin.find:
+    paths: /usr/lib/domainpilot/releases
+    file_type: directory
+  register: cli_releases
+  changed_when: false
+
+- name: Keep the current and two previous releases
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: absent
+  loop: "{{ (cli_releases.files | sort(attribute='mtime', reverse=true))[3:] }}"
+  when: item.path | basename != dp_version
+  loop_control:
+    label: "{{ item.path }}"
 
 - name: Verify the CLI starts
   ansible.builtin.command: /usr/local/bin/site version

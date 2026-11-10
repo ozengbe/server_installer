@@ -179,14 +179,29 @@ class Registry:
 
     # --- tenants & sites -----------------------------------------------------
 
-    def allocate_tenant(self, *, tier: str = "s") -> Tenant:
-        """Reserve the next tenant ID and UID (never reused)."""
+    def allocate_tenant(self, *, tier: str = "s", tenant_id: str | None = None) -> Tenant:
+        """Reserve the next tenant ID and UID (never reused).
+
+        ``tenant_id`` is for disaster recovery on a new server: the site gets the
+        id it had on the lost one, so its backup repository, file owners and
+        database names match. It must never have existed in this registry.
+        """
         if tier not in ("s", "c"):
             raise OperationFailed(f"unknown tier {tier!r}")
         now = _now()
         with self._tx() as conn:
-            row = conn.execute("SELECT COALESCE(MAX(seq), 0) FROM tenants").fetchone()
-            seq = int(row[0]) + 1
+            if tenant_id is not None:
+                seq = int(validate.tenant_id(tenant_id)[1:])
+                if seq < 1:
+                    raise PreconditionFailed("tenant ids start at t0001")
+                used = conn.execute("SELECT 1 FROM tenants WHERE seq = ?", (seq,)).fetchone()
+                if used:
+                    raise PreconditionFailed(
+                        f"tenant {tenant_id} already exists on this server (ids are never reused)"
+                    )
+            else:
+                row = conn.execute("SELECT COALESCE(MAX(seq), 0) FROM tenants").fetchone()
+                seq = int(row[0]) + 1
             uid = UID_BASE + seq
             if uid > UID_MAX:
                 raise PreconditionFailed("tenant UID range exhausted")

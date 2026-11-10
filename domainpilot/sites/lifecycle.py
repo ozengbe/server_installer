@@ -9,6 +9,7 @@ undoes everything; a crash leaves the tenant in "provisioning", which
 
 from __future__ import annotations
 
+import contextlib
 import grp
 import json
 import pwd
@@ -31,7 +32,7 @@ from domainpilot.core.errors import (
     PreconditionFailed,
 )
 from domainpilot.core.paths import Paths
-from domainpilot.core.registry import Registry, Site, Tenant
+from domainpilot.core.registry import UID_BASE, Registry, Site, Tenant
 from domainpilot.core.txn import Reporter, Step, Transaction
 from domainpilot.isolation import db
 from domainpilot.isolation.limits import TenantLimits
@@ -73,6 +74,8 @@ class CreateRequest:
     limits: TenantLimits = field(default_factory=TenantLimits)
     # Manage the site's DNS in Cloudflare when its zone is reachable with a stored token.
     cloudflare: bool = True
+    # Disaster recovery: reuse the tenant id the site had on a lost server.
+    tenant_id: str | None = None
 
 
 class SiteManager:
@@ -194,6 +197,25 @@ class SiteManager:
 
     # --- create --------------------------------------------------------------
 
+    def _check_free_identity(self, tenant_id: str) -> None:
+        """--tenant-id must not collide with anything left on this host."""
+        uid = UID_BASE + int(tenant_id[1:])
+        clashes = []
+        for name in (tenant_id, f"{tenant_id}-deploy"):
+            with contextlib.suppress(KeyError):
+                pwd.getpwnam(name)
+                clashes.append(f"user {name}")
+        with contextlib.suppress(KeyError):
+            clashes.append(f"uid {uid} ({pwd.getpwuid(uid).pw_name})")
+        root = self.paths.tenant_root(tenant_id)
+        if root.exists() or root.is_symlink():
+            clashes.append(str(root))
+        if clashes:
+            raise PreconditionFailed(
+                f"tenant id {tenant_id} is still in use on this host: {', '.join(clashes)}",
+                hint="--tenant-id is only for recreating a site on a new server",
+            )
+
     def create(self, req: CreateRequest) -> dict[str, Any]:
         domain = validate.domain(req.domain)
         aliases = list(dict.fromkeys(validate.domain(a) for a in req.aliases if a != domain))
@@ -225,10 +247,12 @@ class SiteManager:
         if req.site_type != "proxy" and req.upstream:
             raise PreconditionFailed("--upstream is only valid with --type proxy")
 
+        if req.tenant_id is not None:
+            self._check_free_identity(validate.tenant_id(req.tenant_id))
         if self.dry_run:
-            tenant = Tenant("t0000", 20000, "provisioning", "s", "local", "")
+            tenant = Tenant(req.tenant_id or "t0000", 20000, "provisioning", "s", "local", "")
         else:
-            tenant = self.registry.allocate_tenant()
+            tenant = self.registry.allocate_tenant(tenant_id=req.tenant_id)
             self.registry.set_tenant_settings(
                 tenant.id,
                 {

@@ -1,16 +1,24 @@
 # DomainPilot Secure Server Management Platform
 
-A secure-by-default Ubuntu 24.04 web server manager: Ansible-hardened hosts, strict per-tenant isolation, and a `site` CLI.
+A secure-by-default web server manager for Ubuntu 24.04 and 26.04 LTS: Ansible-hardened hosts, strict per-tenant isolation, and a `site` CLI.
 
-**Status: Phase 2 (hardened host baseline + core services) implemented; tenant isolation (Phase 4) is next after the CLI foundation (Phase 3). Not for production use.**
+**Status: 0.10.0 preview.** All roadmap phases (0-10) are implemented and validated on a real host. Releases are labelled preview until an independent review of the root-run code (security gate 6). See [CHANGELOG.md](CHANGELOG.md).
 
 ## Documents
+For administrators:
+- [Install guide](docs/install.md): download, verify, install, first site
+- [Administrator guide](docs/admin-guide.md): day-to-day operation
+- [Upgrade guide](docs/upgrade.md)
+- Runbooks: [incident](docs/runbooks/incident.md), [restore](docs/runbooks/restore.md), [rollback](docs/runbooks/rollback.md), [key rotation](docs/runbooks/key-rotation.md)
+- [Security validation report](docs/security-report.md): what is tested, residual risks
+
+Design and development:
 - [Architecture](docs/architecture.md): components, isolation model, privilege model, open decisions
 - [Threat model](docs/threat-model.md)
 - [Security baseline](docs/security-baseline.md)
 - [CLI specification](docs/cli-spec.md)
-- [Install guide](docs/install.md)
 - [Roadmap](docs/roadmap.md)
+- [Making a release](docs/release.md)
 
 ## Development
 
@@ -20,6 +28,7 @@ A secure-by-default Ubuntu 24.04 web server manager: Ansible-hardened hosts, str
 | Create a disposable Ubuntu 24.04 test VM | `bash tools/vm.sh up` (requires [Multipass](https://canonical.com/multipass/install)) |
 | Run integration tests in the VM (as root) | `bash tools/vm.sh test` |
 | Destroy the VM | `bash tools/vm.sh down` |
+| Unsigned test build of a release tarball | `bash tools/release.sh --snapshot` |
 
 CI (`.github/workflows/ci.yml`) runs the same checks, then the integration tests on a disposable `ubuntu-24.04` runner.
 Integration tests refuse to run on any host without the `/etc/domainpilot-test-vm` marker. **Never create that marker on a production server.**
@@ -28,7 +37,7 @@ Priorities: Security → Isolation → Reliability → Maintainability → Perfo
 
 ## The `site` CLI
 
-Available now (Phases 3–9):
+Commands:
 
 ```bash
 sudo site example.com create [--type php|static|proxy] [--alias www.example.com] [--upstream https://host]
@@ -48,6 +57,9 @@ sudo site example.com restore [--files|--db|--all] [--snapshot ID] [--to-staging
 sudo site example.com sftp create --key id.pub [--name alice] | sftp list | sftp revoke alice --confirm example.com
 sudo site system backup setup --repository s3:https://ENDPOINT/BUCKET[/prefix] --credentials-stdin
 sudo site system backup [--status|--verify|--test-restore] | backup show-key | backup import-key
+sudo site system backup rotate-key [--finish] | backup sites   # key rotation; disaster recovery
+sudo site example.com create --tenant-id t0003                  # recreate a lost server's site
+sudo site version
 echo URL | sudo site system alerts setup --kind ntfy|slack|discord|telegram|webhook --url-stdin
 sudo site system audit | system security | example.com security [--verbose-report]
 sudo site example.com isolation audit | isolation test   # live escape attempts from inside the site
@@ -56,7 +68,7 @@ sudo site system alerts test|status | system monitor [--notify] | system logs [-
 
 Every command takes `--json`, `--dry-run` (mutating commands) and `--help`. New sites get a certificate automatically (AutoSSL) as soon as their DNS points at the server; until then they are served over HTTP. Settings: `[ssl] email`, `staging`, `autossl` in `/etc/domainpilot/domainpilot.toml`. Commands from later phases are registered and say which phase adds them.
 
-Layout on a server: the package lives in `/usr/lib/domainpilot/domainpilot/` and the wrapper at `/usr/local/bin/site` ([bin/site](bin/site)), which runs Python in isolated mode (`-I`). The runtime uses only the standard library. Core modules are in [domainpilot/core/](domainpilot/core/):
+Layout on a server: the package lives in `/usr/lib/domainpilot/releases/<version>/` (`current` points at the active one) and the wrapper at `/usr/local/bin/site` ([bin/site](bin/site)), which runs Python in isolated mode (`-I`). The runtime uses only the standard library. Core modules are in [domainpilot/core/](domainpilot/core/):
 
 | Module | Role |
 |---|---|

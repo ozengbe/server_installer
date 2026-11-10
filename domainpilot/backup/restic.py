@@ -171,8 +171,9 @@ class Restic:
                 return snap
         raise OperationFailed(f"no snapshot {snap_id}")
 
-    def restore(self, snap: Snapshot, target: Path) -> None:
-        self._restic("restore", snap.id, f"--target={target}", "--verify", timeout=6 * 3600)
+    def restore(self, snap: Snapshot, target: Path, *, include: str | None = None) -> None:
+        extra = [f"--include={include}"] if include else []
+        self._restic("restore", snap.id, f"--target={target}", "--verify", *extra, timeout=6 * 3600)
 
     def dump_into(self, snap: Snapshot, filename: str, consumer: list[str]) -> None:
         """`restic dump <snap> /<file> | consumer` (e.g. into mariadb)."""
@@ -205,3 +206,48 @@ class Restic:
         if read_data_subset:
             args.append(f"--read-data-subset={read_data_subset}")
         self._restic(*args, timeout=6 * 3600)
+
+    # --- keys (master-key rotation) -------------------------------------------
+
+    def probe(self) -> str:
+        """'ok' if this password opens the repository, 'absent' if there is no
+        repository, 'denied' if the password is wrong. Other errors raise."""
+        r = self._restic("cat", "config", "--no-lock", timeout=120, check=False)
+        if r.ok:
+            return "ok"
+        err = r.stderr.lower()
+        if "wrong password" in err or "no key found" in err or r.returncode == 12:
+            return "denied"
+        if r.returncode == 10 or "does not exist" in err or "unable to open config" in err:
+            return "absent"
+        raise OperationFailed(f"restic could not open the repository: {r.stderr.strip()[-300:]}")
+
+    def current_key_id(self) -> str:
+        """Id of the key that this environment's password opens."""
+        out = self._restic("key", "list", "--json", "--no-lock", timeout=120).stdout
+        try:
+            keys = json.loads(out)
+        except ValueError:
+            raise OperationFailed("restic key list returned no JSON") from None
+        for key in keys if isinstance(keys, list) else []:
+            if isinstance(key, dict) and key.get("current"):
+                key_id = str(key.get("id", ""))
+                if re.fullmatch(r"[0-9a-f]{8,64}", key_id):
+                    return key_id
+        raise OperationFailed("restic did not report the current key")
+
+    def add_key(self, new_password_file: Path) -> None:
+        self._restic(
+            "key",
+            "add",
+            "--retry-lock=5m",
+            f"--new-password-file={new_password_file}",
+            "--host=domainpilot",
+            "--user=rotate",
+            timeout=300,
+        )
+
+    def remove_key(self, key_id: str) -> None:
+        if not re.fullmatch(r"[0-9a-f]{8,64}", key_id):
+            raise ValidationError(f"invalid restic key id {key_id!r}")
+        self._restic("key", "remove", "--retry-lock=5m", key_id, timeout=300)

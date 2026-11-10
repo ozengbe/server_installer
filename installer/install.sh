@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
-# DomainPilot installer bootstrap (Phase 2a: host baseline).
+# DomainPilot installer: fresh installs and upgrades (docs/install.md, docs/upgrade.md).
 #
-#   sudo installer/install.sh [--vars FILE] [--check] [--yes] [-- EXTRA-ANSIBLE-ARGS]
+#   sudo installer/install.sh [--vars FILE] [--check] [--yes] [--allow-downgrade] [-- EXTRA-ANSIBLE-ARGS]
 #
 #   --vars FILE   host settings (default /etc/domainpilot/install.yml; generated
 #                 on first run from the invoking admin's SSH keys)
 #   --check       dry run: show what would change (ansible --check --diff)
 #   --yes         don't ask for confirmation
+#   --allow-downgrade  install an older release (see docs/runbooks/rollback.md)
 #
 # Run it via sudo from the admin account you SSH in with. That account becomes
 # the first DomainPilot admin, so hardening cannot lock you out.
@@ -20,6 +21,7 @@ info() { echo "install.sh: $*"; }
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 VARS=/etc/domainpilot/install.yml
 CHECK=()
+DOWNGRADE=()
 ASSUME_YES=0
 EXTRA=()
 
@@ -28,8 +30,9 @@ while [[ $# -gt 0 ]]; do
     --vars) VARS="${2:?--vars needs a file}"; shift 2 ;;
     --check) CHECK=(--check --diff); shift ;;
     --yes) ASSUME_YES=1; shift ;;
+    --allow-downgrade) DOWNGRADE=(--allow-downgrade); shift ;;
     --) shift; EXTRA=("$@"); break ;;
-    -h|--help) sed -n '2,13p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,14p' "$0"; exit 0 ;;
     *) die "unknown option: $1 (see --help)" ;;
   esac
 done
@@ -113,6 +116,79 @@ generate_vars() {
 
 [[ -f $VARS ]] || generate_vars
 
+# --- Release identity and upgrade policy (docs/upgrade.md) -------------------
+STATE_DIR=/var/lib/domainpilot
+RELEASE_JSON=$STATE_DIR/release.json
+SNAP_DIR=/var/backups/domainpilot
+
+release_py() {
+  python3 -IB -c 'import sys; sys.path.insert(0, sys.argv[1]); from domainpilot.release import installer_main; raise SystemExit(installer_main(sys.argv[2:]))' "$REPO" "$@"
+}
+
+# A release tarball carries MANIFEST.sha256 (covered by the signed SHA256SUMS):
+# refuse to run from a tree whose files differ from what was released.
+if [[ -f $REPO/MANIFEST.sha256 ]]; then
+  (cd "$REPO" && sha256sum --quiet --strict -c MANIFEST.sha256) \
+    || die "release files do not match MANIFEST.sha256: re-download and verify the release"
+fi
+
+if [[ -f $REPO/RELEASE ]]; then
+  COMMIT="$(sed -n 's/^commit=\([0-9a-f]\{7,40\}\)$/\1/p' "$REPO/RELEASE")"
+else
+  COMMIT="$(git -c "safe.directory=$REPO" -C "$REPO" rev-parse --short=12 HEAD 2>/dev/null || true)"
+fi
+[[ $COMMIT =~ ^[0-9a-f]{7,40}$ ]] || COMMIT=unknown
+
+PLAN="$(release_py plan "$RELEASE_JSON" "${DOWNGRADE[@]}")" || exit 3
+read -r ACTION FROM_VERSION TO_VERSION <<<"$PLAN"
+case "$ACTION" in
+  fresh) info "Installing DomainPilot $TO_VERSION" ;;
+  reinstall) info "Re-applying DomainPilot $TO_VERSION" ;;
+  upgrade|downgrade)
+    info "${ACTION^}: DomainPilot $FROM_VERSION -> $TO_VERSION (read docs/upgrade.md first)"
+    [[ ${#CHECK[@]} -gt 0 ]] || confirm "Continue?" || die "aborted"
+    ;;
+  *) die "unexpected upgrade plan: $PLAN" ;;
+esac
+
+# Everything needed to roll back DomainPilot's own state: registry (copied
+# consistently with SQLite's online backup), settings, secrets, generated
+# configs. Root-only; the newest 5 are kept.
+snapshot_state() {
+  local ts tmp out
+  ts="$(date +%Y%m%dT%H%M%S)"
+  out="$SNAP_DIR/pre-upgrade-$FROM_VERSION-to-$TO_VERSION-$ts.tar.gz"
+  install -d -m 0700 "$SNAP_DIR"
+  tmp="$(mktemp -d "$SNAP_DIR/.snap.XXXXXX")"
+  if [[ -f $STATE_DIR/registry.sqlite3 ]]; then
+    python3 -I -c 'import sqlite3, sys
+src = sqlite3.connect("file:" + sys.argv[1] + "?mode=ro", uri=True)
+dst = sqlite3.connect(sys.argv[2])
+src.backup(dst)
+dst.close()
+src.close()' "$STATE_DIR/registry.sqlite3" "$tmp/registry.sqlite3"
+  fi
+  local paths=()
+  for p in etc/domainpilot var/lib/domainpilot etc/nginx etc/php etc/mysql \
+           etc/apparmor.d/domainpilot etc/ssh/sshd_config.d etc/nftables.conf; do
+    [[ -e /$p ]] && paths+=("$p")
+  done
+  tar --create --gzip --file "$out" \
+      --exclude=var/lib/domainpilot/backup/cache \
+      --exclude='var/lib/domainpilot/registry.sqlite3*' \
+      -C / "${paths[@]}" -C "$tmp" . \
+    || { rm -rf "$tmp" "$out"; die "pre-upgrade snapshot failed; nothing was changed"; }
+  chmod 0600 "$out"
+  rm -rf "$tmp"
+  info "Pre-upgrade snapshot: $out"
+  find "$SNAP_DIR" -maxdepth 1 -name 'pre-upgrade-*.tar.gz' -type f -printf '%T@ %p\n' \
+    | sort -rn | tail -n +6 | cut -d' ' -f2- | xargs -r rm -f --
+}
+
+if [[ ${#CHECK[@]} -eq 0 && ( $ACTION == upgrade || $ACTION == downgrade ) ]]; then
+  snapshot_state
+fi
+
 if ! command -v ansible-playbook >/dev/null 2>&1; then
   info "Installing ansible-core from the Ubuntu archive"
   apt-get update -qq
@@ -124,6 +200,13 @@ export ANSIBLE_CONFIG="$REPO/ansible/ansible.cfg"
 info "Running playbook ${CHECK[*]:+(${CHECK[*]})}"
 ansible-playbook -i localhost, -c local "$REPO/ansible/site.yml" \
   -e "@$VARS" "${CHECK[@]}" "${EXTRA[@]}"
+
+
+if [[ ${#CHECK[@]} -eq 0 ]]; then
+  release_py record "$RELEASE_JSON" "$STATE_DIR/release-history.jsonl" "$COMMIT" \
+    || die "installed, but could not record the release in $RELEASE_JSON"
+  info "DomainPilot $TO_VERSION ($COMMIT) is installed."
+fi
 
 if [[ -e /var/lib/domainpilot/firewall/pending ]]; then
   cat <<'EOF'

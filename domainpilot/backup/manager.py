@@ -19,6 +19,7 @@ import os
 import re
 import shutil
 import socket
+import sqlite3
 import stat
 import time
 import uuid
@@ -219,6 +220,52 @@ class BackupManager:
         self._say(f"backed up server configuration ({snap[:8]})")
         return {"snapshot": snap}
 
+    def recorded_sites(self, snapshot: str | None = None) -> dict[str, Any]:
+        """Disaster recovery: the sites (and their tenant ids) recorded in a
+        server-configuration backup, read from its registry copy."""
+        restic = self.restic("system")
+        if snapshot:
+            snap = restic.find(snapshot)
+        else:
+            snaps = restic.snapshots(["system"])
+            if not snaps:
+                raise PreconditionFailed(
+                    "there is no server-configuration backup in the repository"
+                )
+            snap = snaps[0]
+        copy = self.paths.var_lib / "backup" / "registry-copy.sqlite3"
+        staging = self._staging("system")
+        try:
+            restic.restore(snap, staging, include=str(copy))
+            restored = staging / copy.relative_to(copy.anchor)
+            if not restored.is_file() or restored.is_symlink():
+                raise OperationFailed(f"snapshot {snap.short_id} has no registry copy")
+            conn = sqlite3.connect(f"file:{restored}?mode=ro", uri=True)
+            try:
+                rows = conn.execute(
+                    "SELECT s.domain, s.tenant_id, s.site_type, s.php_version, s.is_primary, "
+                    "t.status FROM sites s JOIN tenants t ON t.id = s.tenant_id "
+                    "ORDER BY s.tenant_id, s.is_primary DESC, s.domain"
+                ).fetchall()
+            finally:
+                conn.close()
+        except sqlite3.Error as exc:
+            raise OperationFailed(f"cannot read the registry copy: {exc}") from None
+        finally:
+            shutil.rmtree(staging, ignore_errors=True)
+        sites = [
+            {
+                "domain": str(r[0]),
+                "tenant": str(r[1]),
+                "type": str(r[2]),
+                "php": r[3],
+                "primary": bool(r[4]),
+                "status": str(r[5]),
+            }
+            for r in rows
+        ]
+        return {"snapshot": snap.short_id, "time": snap.time, "sites": sites}
+
     def backup_all(self) -> dict[str, Any]:
         results: dict[str, Any] = {"sites": {}, "failed": []}
         try:
@@ -406,6 +453,105 @@ class BackupManager:
     def _repos(self) -> list[str]:
         tenants = [t.id for t in self.registry.list_tenants() if t.status in ("active", "archived")]
         return ["system", *tenants]
+
+    # --- master-key rotation ----------------------------------------------------
+
+    def restic_with(self, name: str, key: str) -> Restic:
+        self.cache_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+        env = self.settings.restic_env(self.config(), name, self.cache_dir, key=key)
+        return Restic(env, run=self.run, pipe=self.pipe, hostname=self.hostname)
+
+    def _password_file(self, name: str) -> Path:
+        """New repository password for `restic key add`, on tmpfs, root 0600."""
+        self.paths.run.mkdir(mode=0o700, parents=True, exist_ok=True)
+        path = self.paths.run / f"rotate-{name}-{uuid.uuid4().hex}.pw"
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+        try:
+            os.write(fd, self.settings.repo_password(name, key="master-next").encode())
+        finally:
+            os.close(fd)
+        return path
+
+    def rotate_key(self) -> dict[str, Any]:
+        """Step 1: add a key derived from a new master to every repository, then
+        make the new master current. The old key keeps working until finish."""
+        state = self.settings.rotation_state()
+        if state == "promoted":
+            raise PreconditionFailed(
+                "a previous rotation is waiting to be finished",
+                hint="store the current key offline, then: sudo site system backup "
+                "rotate-key --finish",
+            )
+        self.settings.begin_rotation()
+        results: dict[str, str] = {}
+        for name in self._repos():
+            if self.restic_with(name, "master-next").probe() == "ok":
+                results[name] = "already rotated"
+                continue
+            status = self.restic_with(name, "master").probe()
+            if status == "absent":
+                results[name] = "no repository yet"
+                continue
+            if status != "ok":
+                raise OperationFailed(
+                    f"repository {name}: neither the current nor the new key opens it",
+                    hint="nothing was removed; check `sudo site system backup --verify`",
+                )
+            pw = self._password_file(name)
+            try:
+                self.restic_with(name, "master").add_key(pw)
+            finally:
+                pw.unlink(missing_ok=True)
+            if self.restic_with(name, "master-next").probe() != "ok":
+                raise OperationFailed(
+                    f"repository {name}: the new key was added but does not open it"
+                )
+            results[name] = "new key added"
+            self._say(f"{name}: new key added")
+        self.settings.promote_next()
+        self.audit.record(
+            "backup.rotate_key",
+            argv=self.argv,
+            outcome="success",
+            details={"step": "promoted", "repositories": len(results)},
+        )
+        return {"step": "promoted", "repositories": results}
+
+    def finish_rotation(self) -> dict[str, Any]:
+        """Step 2: remove the old key from every repository."""
+        if self.settings.rotation_state() != "promoted":
+            raise PreconditionFailed(
+                "no rotation is waiting to be finished",
+                hint="start one with: sudo site system backup rotate-key",
+            )
+        results: dict[str, str] = {}
+        for name in self._repos():
+            old = self.restic_with(name, "master-prev")
+            status = old.probe()
+            if status != "ok":
+                results[name] = "old key already gone" if status == "denied" else "no repository"
+                continue
+            old_id = old.current_key_id()
+            new = self.restic_with(name, "master")
+            if new.probe() != "ok":
+                raise OperationFailed(
+                    f"repository {name}: the new key does not open it; keeping the old key",
+                    hint="run `sudo site system backup rotate-key` again first",
+                )
+            if new.current_key_id() == old_id:  # same password (should never happen)
+                results[name] = "unchanged"
+                continue
+            new.remove_key(old_id)
+            results[name] = "old key removed"
+            self._say(f"{name}: old key removed")
+        self.settings.drop_previous()
+        self.audit.record(
+            "backup.rotate_key",
+            argv=self.argv,
+            outcome="success",
+            details={"step": "finished", "repositories": len(results)},
+        )
+        return {"step": "finished", "repositories": results}
 
     def verify(self, *, read_data_subset: str = "2%") -> dict[str, Any]:
         results: dict[str, Any] = {}

@@ -154,14 +154,45 @@ class BackupSettings:
             raise ValidationError("a master key is 64 lowercase hex characters")
         self.secrets.save("master", key)
 
-    def repo_password(self, name: str) -> str:
-        master = bytes.fromhex(self.secrets.load("master").strip())
+    # --- master-key rotation (docs/runbooks/key-rotation.md) ------------------
+    # Secrets during a rotation:  "master-next" = new key not yet in use;
+    # "master-prev" = old key, still accepted by the repositories until
+    # `rotate-key --finish` removes it. Every step is idempotent, so an
+    # interrupted rotation is completed by running the same command again.
+
+    def rotation_state(self) -> str:
+        if self.secrets.exists("master-next"):
+            return "adding"
+        if self.secrets.exists("master-prev"):
+            return "promoted"
+        return "idle"
+
+    def begin_rotation(self) -> None:
+        if not self.secrets.exists("master"):
+            raise PreconditionFailed("there is no master key to rotate")
+        if not self.secrets.exists("master-next"):
+            self.secrets.save("master-next", secrets.token_hex(32))
+
+    def promote_next(self) -> None:
+        """New key becomes the master; the old one is kept as master-prev."""
+        if not self.secrets.exists("master-prev"):
+            self.secrets.save("master-prev", self.secrets.load("master").strip())
+        self.secrets.save("master", self.secrets.load("master-next").strip())
+        self.secrets.remove("master-next")
+
+    def drop_previous(self) -> None:
+        self.secrets.remove("master-prev")
+
+    def repo_password(self, name: str, *, key: str = "master") -> str:
+        master = bytes.fromhex(self.secrets.load(key).strip())
         return hmac.new(master, _DERIVE_CONTEXT + name.encode(), hashlib.sha256).hexdigest()
 
-    def restic_env(self, config: BackupConfig, name: str, cache_dir: Path) -> dict[str, str]:
+    def restic_env(
+        self, config: BackupConfig, name: str, cache_dir: Path, *, key: str = "master"
+    ) -> dict[str, str]:
         env = {
             "RESTIC_REPOSITORY": config.repo_url(name),
-            "RESTIC_PASSWORD": self.repo_password(name),
+            "RESTIC_PASSWORD": self.repo_password(name, key=key),
             "RESTIC_CACHE_DIR": str(cache_dir),
             "RESTIC_PROGRESS_FPS": "0.0167",
         }

@@ -59,6 +59,10 @@ def _create_args(p: argparse.ArgumentParser) -> None:
         action="store_true",
         help="do not create DNS records in Cloudflare for this site",
     )
+    p.add_argument(
+        "--tenant-id",
+        help="disaster recovery: reuse the id (tNNNN) the site had on the lost server",
+    )
 
 
 def _php_version_arg(p: argparse.ArgumentParser) -> None:
@@ -159,6 +163,19 @@ def _report_args(p: argparse.ArgumentParser) -> None:
 def _show_secret_flag(p: argparse.ArgumentParser) -> None:
     p.add_argument(
         "--show-secret", action="store_true", help="print it even when not on a terminal"
+    )
+
+
+def _snapshot_opt(p: argparse.ArgumentParser) -> None:
+    p.add_argument("--snapshot", help="server backup to read (default: the newest)")
+
+
+def _rotate_key_args(p: argparse.ArgumentParser) -> None:
+    _show_secret_flag(p)
+    p.add_argument(
+        "--finish",
+        action="store_true",
+        help="remove the old key (only after the new one is stored offline)",
     )
 
 
@@ -481,6 +498,24 @@ COMMANDS: tuple[CommandSpec, ...] = (
         8,
         "Import a master key (disaster recovery)",
         backup_handlers.import_key,
+    ),
+    CommandSpec(
+        SY,
+        ("backup", "sites"),
+        "R",
+        10,
+        "Sites recorded in a server backup (disaster recovery)",
+        backup_handlers.recorded_sites,
+        configure=_snapshot_opt,
+    ),
+    CommandSpec(
+        SY,
+        ("backup", "rotate-key"),
+        "M",
+        10,
+        "Rotate the backup master key (then --finish)",
+        backup_handlers.rotate_key,
+        configure=_rotate_key_args,
     ),
     CommandSpec(
         SY,

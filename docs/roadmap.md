@@ -1,4 +1,4 @@
-# DomainPilot — Development Roadmap (Phase 1 draft)
+# DomainPilot — Development Roadmap
 
 Each milestone is a small, reviewable change with explicit acceptance criteria. Nothing moves to the next milestone until the current one is reviewed. "VM" means a disposable Ubuntu 24.04 VM. Destructive or security tests never run against production.
 
@@ -15,7 +15,7 @@ Each milestone is a small, reviewable change with explicit acceptance criteria. 
 | **7** ✅ impl (branch phase-6 working tree; real 26.04 host 6/6) | Optimization + updates | hardware/metrics analysis, profiles, diff/apply/rollback, unattended-upgrades policy, needrestart policy, health checks | Apply then rollback restores byte-identical configs; no auto-reboot; update history visible |
 | **8** ✅ impl (branch phase-6 working tree; real 26.04 host: backup/restore, restore drill, crash→restart→alert pass) | SFTP, backups, monitoring | chrooted SFTP, restic per-tenant repos, DB dumps, restore-to-staging, exporters on wg/loopback, alert rules, bounded restarts | SFTP escape tests fail as expected; scheduled restore test succeeds; killing a service triggers bounded recovery and then an alert |
 | **9** ✅ impl (real 26.04 host: 25/25 security tests, full suite 152 pass; audits, isolation self-test, negative suite, traceability gate; see docs/security-report.md) | Security validation | `system audit`, `system security`, per-site security, negative test suite (injection, traversal, symlink races, privilege escalation, chroot escape, metadata, cross-tenant), recovery drills | All checks pass in VM; findings report with residual risks; **external review of CLI root paths recommended** |
-| **10** | Release | admin guide, runbooks (incident, restore, rollback, key rotation), upgrade path, signed release artifact (`.deb` or tarball + checksum + signature) | Fresh install from docs alone on a clean VM by someone other than the author |
+| **10** ✅ impl (0.10.0 preview: signed tarball tooling, upgrade path, admin guide, runbooks; acceptance install by a second person pending) | Release | admin guide, runbooks (incident, restore, rollback, key rotation), upgrade path, signed release artifact (`.deb` or tarball + checksum + signature) | Fresh install from docs alone on a clean VM by someone other than the author |
 
 ## Security acceptance criteria (gate for calling it "enterprise-ready")
 

@@ -16,7 +16,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import NoReturn, TextIO
 
-from domainpilot import __version__
+from domainpilot import __version__, release
 from domainpilot.cli import commands
 from domainpilot.cli.commands import CommandSpec
 from domainpilot.cli.context import CommandResult, Context
@@ -186,6 +186,7 @@ def main(
             return int(ExitCode.OK if rest or flags.help else ExitCode.USAGE)
         if rest[0] == "version":
             print(f"site (DomainPilot) {__version__}", file=stdout)
+            print(release.describe_installed(), file=stdout)
             return 0
 
         head = rest[0]

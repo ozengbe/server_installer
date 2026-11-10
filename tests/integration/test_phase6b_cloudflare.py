@@ -45,7 +45,7 @@ def site_json(*args: str) -> dict[str, Any]:
 
 def zone_snapshot() -> list[tuple[str, str, str, bool, str]]:
     """Every record in the zone, read with DomainPilot's own client and token."""
-    sys.path.insert(0, "/usr/lib/domainpilot")
+    sys.path.insert(0, "/usr/lib/domainpilot/current")
     from domainpilot.cloudflare.creds import CredentialStore
     from domainpilot.cloudflare.manager import CloudflareManager
 

@@ -6,7 +6,7 @@
 #     files, and the installer stays idempotent).
 import sys
 
-sys.path.insert(0, "/usr/lib/domainpilot")
+sys.path.insert(0, "/usr/lib/domainpilot/current")
 
 from domainpilot.cli.main import main  # noqa: E402
 

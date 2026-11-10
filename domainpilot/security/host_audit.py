@@ -323,6 +323,11 @@ def check_paths(
                     sinfo = _mode(sub)
                     if sinfo is None:
                         continue
+                    if sub.is_symlink():  # e.g. /usr/lib/domainpilot/current
+                        inside = sub.resolve().is_relative_to(path.resolve())
+                        if sinfo[1] != rule.owner or not inside:
+                            problems.append(f"{sub.relative_to(path)}: symlink leaving the tree")
+                        continue
                     limit = rule.max_mode if name in dirnames else rule.recursive_files
                     if sinfo[1] != rule.owner or _too_open(sinfo[0], limit):
                         problems.append(f"{sub.relative_to(path)}: {sinfo[0]:04o} uid {sinfo[1]}")

@@ -64,6 +64,12 @@ dp_nginx_client_max_body_size: 64m
 dp_nginx_rate_limit: 20r/s
 dp_nginx_conn_per_ip: 100
 
+# --- DomainPilot release being installed: read from the package itself, so the
+# installed code and the recorded version can never disagree. ---
+dp_version: >-
+  {{ (lookup('ansible.builtin.file', playbook_dir ~ '/../domainpilot/__init__.py')
+      | regex_search('__version__ = "[0-9a-z.]+"')).split('"')[1] }}
+
 # --- Supported Ubuntu releases and their defaults (all from the Ubuntu archive,
 # so they get Canonical security updates for the life of the release). ---
 dp_supported_releases: ["24.04", "26.04"]

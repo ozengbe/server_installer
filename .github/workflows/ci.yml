@@ -18,6 +18,13 @@ jobs:
       - run: sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
       - run: pip install -e ".[dev]" "ansible-lint==24.12.2" "ansible-core>=2.16,<2.17"
       - run: bash tools/ci/step.sh "checks" plain -- bash tools/check.sh
+      # The release tooling must keep working: build an unsigned snapshot and
+      # check that the tarball's manifest verifies (docs/release.md).
+      - name: Release build (unsigned snapshot)
+        run: |
+          tools/ci/step.sh "release build" plain -- bash tools/release.sh --snapshot --out dist
+          mkdir dist/x && tar -xzf dist/domainpilot-*.tar.gz -C dist/x
+          cd dist/x/domainpilot-* && sha256sum --quiet --strict -c MANIFEST.sha256
 
   integration:
     # GitHub-hosted runners are disposable Ubuntu 24.04 VMs with systemd and sudo.
