@@ -36,6 +36,8 @@ Resolver = Callable[[str, int], list[str]]
 
 DEFAULT_HSTS = 300  # 5 minutes: HSTS is rolled out in steps (raise once HTTPS is proven)
 MAX_HSTS = 63072000  # 2 years
+# Port 80 of a site with a trusted certificate: ACME challenges (snippet) + redirect.
+REDIRECT = "    location / {\n        return 301 https://$host$request_uri;\n    }"
 
 
 def _template(name: str) -> Template:
@@ -132,9 +134,15 @@ class Nginx:
         upstream: Upstream | None = None,
         tls: TlsFiles | None = None,
         hsts_max_age: int = DEFAULT_HSTS,
+        trusted: bool = True,
     ) -> str:
         """Compose the site body (php/static/proxy/maintenance) into the HTTP or
-        HTTPS wrapper. HSTS is only ever sent over HTTPS."""
+        HTTPS wrapper. HSTS is only ever sent over HTTPS.
+
+        ``trusted=False`` is the self-signed placeholder certificate a new site gets
+        until Let's Encrypt issues one: HTTPS works (e.g. behind Cloudflare in
+        "Full" mode) but HTTP is served too, with no redirect and no HSTS, so direct
+        visitors are never pushed onto a certificate their browser rejects."""
         if kind not in SITE_KINDS:
             raise ValidationError(f"unknown site kind {kind!r}")
         if kind == "proxy" and upstream is None:
@@ -144,7 +152,7 @@ class Nginx:
         names = [validate.domain(domain), *(validate.domain(a) for a in aliases)]
         hsts = (
             f'    add_header Strict-Transport-Security "max-age={hsts_max_age}" always;'
-            if tls and hsts_max_age
+            if tls and trusted and hsts_max_age
             else ""
         )
         values = {
@@ -162,8 +170,10 @@ class Nginx:
         }
         body = _template(f"{kind}.body.tmpl").substitute(values)
         wrapper = _template("https.tmpl" if tls else "http.tmpl")
+        body = body.rstrip("\n")
+        http_body = REDIRECT if trusted else body
         # The body is inserted as a value, so its nginx "$" variables are not re-read.
-        return wrapper.substitute({**values, "body": body.rstrip("\n")})
+        return wrapper.substitute({**values, "body": body, "http_body": http_body})
 
     def ensure_log_dir(self, tenant: str) -> bool:
         """Root-owned, group adm (log readers), 0750."""

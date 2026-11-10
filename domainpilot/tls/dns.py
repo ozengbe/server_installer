@@ -11,14 +11,17 @@ import ipaddress
 import json
 import socket
 from collections.abc import Callable, Sequence
+from pathlib import Path
 
 from domainpilot.core import proc
 from domainpilot.core.errors import DPError
 
 IP = "/usr/sbin/ip"
+REALIP_CONF = Path("/etc/nginx/domainpilot/snippets/cloudflare-realip.conf")
 
 Runner = Callable[..., proc.Result]
 Resolver = Callable[[str], set[str]]
+Network = ipaddress.IPv4Network | ipaddress.IPv6Network
 
 
 def resolve(name: str) -> set[str]:
@@ -45,8 +48,19 @@ def host_addresses(run: Runner = proc.run) -> set[str]:
     return found
 
 
-def problems(names: Sequence[str], host_ips: set[str], resolver: Resolver = resolve) -> list[str]:
-    """Human-readable reasons why HTTP-01 would fail; empty means eligible."""
+def problems(
+    names: Sequence[str],
+    host_ips: set[str],
+    resolver: Resolver = resolve,
+    proxy_ranges: Sequence[Network] = (),
+) -> list[str]:
+    """Human-readable reasons why HTTP-01 would fail; empty means eligible.
+
+    A name proxied through Cloudflare (all its addresses are Cloudflare edges)
+    counts as eligible: Cloudflare forwards the challenge to this server. We
+    cannot see which origin it forwards to; if it is not this one, Let's
+    Encrypt's check fails and the site simply stays on its placeholder.
+    """
     out: list[str] = []
     if not host_ips:
         return ["this server has no public IP address configured"]
@@ -55,7 +69,40 @@ def problems(names: Sequence[str], host_ips: set[str], resolver: Resolver = reso
         if not addresses:
             out.append(f"{name} does not resolve")
             continue
+        if behind(addresses, proxy_ranges):
+            continue
         foreign = sorted(addresses - host_ips)
         if foreign:
             out.append(f"{name} points to {', '.join(foreign)}, not to this server")
     return out
+
+
+def cloudflare_ranges(path: Path = REALIP_CONF) -> list[Network]:
+    """Cloudflare's edge ranges, as installed for nginx's real-IP support."""
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return []
+    nets: list[Network] = []
+    for line in text.splitlines():
+        parts = line.strip().rstrip(";").split()
+        if len(parts) == 2 and parts[0] == "set_real_ip_from":
+            try:
+                nets.append(ipaddress.ip_network(parts[1]))
+            except ValueError:
+                continue
+    return nets
+
+
+def behind(addresses: set[str], ranges: Sequence[Network]) -> bool:
+    """True when every address is a proxy edge (e.g. Cloudflare's orange cloud)."""
+    if not addresses or not ranges:
+        return False
+    for address in addresses:
+        try:
+            ip = ipaddress.ip_address(address)
+        except ValueError:
+            return False
+        if not any(ip in net for net in ranges):
+            return False
+    return True

@@ -23,6 +23,7 @@ _SYMBOLS = {
     "undone": ("↺", "33"),
     "undo_failed": ("✘", "31"),
     "failed": ("✘", "31"),
+    "pending": ("…", "33"),
 }
 
 

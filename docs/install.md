@@ -48,17 +48,63 @@ After hardening:
 
 ## First checks and first site
 
-Do these right after the firewall is confirmed (next section):
+Do these right after the firewall is confirmed (next section). Replace `example.com` with your domain.
+
+**1. Check the server:**
 
 ```bash
 sudo site system health
 sudo site system security            # exit 0 = all clear, 10 = warnings, 11 = critical
-sudo site example.com create --type php
+```
+
+**2. Point DNS at the server.** At your DNS provider, create `A` (IPv4) and, if the server has IPv6, `AAAA` records for `example.com` and `www.example.com` with the server's address. With Cloudflare, the proxy (orange cloud) can be on or off. DomainPilot does not create or change DNS records.
+
+**3. Create the site:**
+
+```bash
+sudo site example.com create --alias www.example.com      # PHP site; --type static or --type proxy also exist
+```
+
+**4. HTTPS.** There's nothing to do:
+- the site gets a self-signed certificate at once;
+- a Let's Encrypt certificate follows as soon as DNS points at the server, directly or through the Cloudflare proxy. If DNS isn't ready yet, the server retries every hour on its own.
+
+**With the Cloudflare proxy on**, set Cloudflare → SSL/TLS → Overview to **Full**. Once `ssl status` shows a Let's Encrypt certificate, you can switch to **Full (strict)**. Don't use *Flexible*: it sends visitor traffic unencrypted between Cloudflare and the server.
+
+To request the certificate right away, or to check it:
+
+```bash
+sudo site example.com ssl              # request Let's Encrypt now
+sudo site example.com ssl status       # which certificate, expiry, what is missing
+```
+
+**5. Upload the website over SFTP.**
+1. Ask the site owner for their SSH **public** key (for example `alice.pub`; Ed25519 is recommended).
+2. Add it:
+   ```bash
+   sudo site example.com sftp create --key alice.pub --name alice
+   ```
+3. The command prints the login (`t0001-deploy@<server>`). Connect with any SFTP client (FileZilla, WinSCP, `sftp`), using the private key. Files go in **`app/public`**, which is the web root.
+4. To remove the access later:
+   ```bash
+   sudo site example.com sftp revoke alice --confirm example.com
+   ```
+
+**6. Database** (PHP apps such as WordPress):
+
+```bash
+sudo site example.com db create            # database t0001_app
+sudo site example.com db credentials       # name, user, password and socket for the app's config
+```
+
+**7. Check isolation**, optional but quick:
+
+```bash
 sudo site example.com status
 sudo site example.com isolation test
 ```
 
-Next, set up [backups](#backups) and [alerts](#alerts). **Don't skip backups:** until a bucket is configured, nothing is backed up.
+Next, set up [backups](#backups) and [alerts](#alerts). **Don't skip backups:** until a bucket is configured, nothing is backed up. `sudo site help` lists the common commands.
 
 ## Confirming the firewall (anti-lockout)
 

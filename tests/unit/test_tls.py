@@ -4,6 +4,7 @@ import argparse
 import io
 import json
 import os
+import stat
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -304,7 +305,7 @@ def test_create_without_dns_stays_http(tls_system: dict[str, Any]) -> None:
     with pytest.raises(PreconditionFailed, match="not eligible"):
         tls_system["tls_manager"]().ssl_issue("example.com")
     off = tls_system["tls_manager"](autossl=False).create(CreateRequest("other.example.com"))
-    assert off["ssl"].startswith("autossl is off")
+    assert off["ssl"].startswith("AutoSSL is off")
 
 
 def test_failed_verification_keeps_http(tls_system: dict[str, Any]) -> None:
@@ -405,3 +406,102 @@ def test_tls_handlers(tls_system: dict[str, Any], monkeypatch: pytest.MonkeyPatc
     tls_system["ca"].not_after = (NOW + timedelta(days=5)).strftime("%b %d %H:%M:%S %Y GMT")
     tls_handlers.ssl_status(ctx, argparse.Namespace())
     assert "expires in" in out.stderr.getvalue()  # type: ignore[attr-defined]
+
+
+# --- placeholder certificate, Cloudflare proxy, AutoSSL retry ---------------------------
+
+
+def _with_openssl(m: Any) -> Any:
+    """Let the placeholder's openssl call create real files."""
+    from domainpilot.tls import selfsigned
+
+    original = m.run
+
+    def run(argv: list[str], **kw: Any) -> Any:
+        if argv[:2] == [selfsigned.OPENSSL, "req"]:
+            Path(argv[argv.index("-keyout") + 1]).write_text("KEY")
+            Path(argv[argv.index("-out") + 1]).write_text("CERT")
+        return original(argv, **kw)
+
+    m.run = run
+    return m
+
+
+def test_new_site_gets_self_signed_https(tls_system: dict[str, Any]) -> None:
+    from domainpilot.sites.lifecycle import CreateRequest
+    from domainpilot.tls import selfsigned
+
+    mgr = _with_openssl(tls_system["tls_manager"]())
+    result = mgr.create(CreateRequest("example.com", aliases=["www.example.com"]))
+    assert result["ssl"].startswith("not issued yet") and 'mode "Full"' in result["ssl"]
+    assert result["cloudflare"] is None  # DNS is never touched by default
+    vhost = (tls_system["conf"] / "example.com.conf").read_text()
+    assert "listen 443 ssl;" in vhost and "selfsigned/example.com/cert.pem" in vhost
+    assert "return 301" not in vhost and "Strict-Transport-Security" not in vhost
+    assert vhost.count("fastcgi_pass") == 2  # served on port 80 and 443
+    files = selfsigned.files(mgr.selfsigned_dir, "example.com")
+    assert files is not None and stat.S_IMODE(files.key.stat().st_mode) == 0o600
+    assert stat.S_IMODE(mgr.selfsigned_dir.stat().st_mode) == 0o700
+    st = mgr.ssl_status("example.com")
+    assert st["https"] and st["certificate_kind"] == "self-signed placeholder"
+    # Let's Encrypt replaces it: redirect + HSTS come back, placeholder no longer used.
+    tls_system["dns"].update(
+        {"example.com": {"80.241.220.98"}, "www.example.com": {"80.241.220.98"}}
+    )
+    mgr.ssl_issue("example.com")
+    vhost = (tls_system["conf"] / "example.com.conf").read_text()
+    assert "fullchain.pem" in vhost and "return 301" in vhost and "selfsigned" not in vhost
+    assert mgr.ssl_status("example.com")["certificate_kind"] == "lets-encrypt"
+    mgr.delete("example.com", purge=True)
+    assert selfsigned.files(mgr.selfsigned_dir, "example.com") is None
+
+
+def test_placeholder_failure_keeps_http(tls_system: dict[str, Any]) -> None:
+    from domainpilot.sites.lifecycle import CreateRequest
+
+    mgr = tls_system["tls_manager"]()  # openssl "runs" but writes nothing
+    mgr.create(CreateRequest("example.com"))
+    assert "listen 443" not in (tls_system["conf"] / "example.com.conf").read_text()
+    assert any("no placeholder certificate" in m for m, _ in tls_system["reported"])
+
+
+def test_cloudflare_proxied_names_are_eligible(tls_system: dict[str, Any], tmp_path: Path) -> None:
+    import ipaddress
+
+    from domainpilot.sites.lifecycle import CreateRequest
+    from domainpilot.tls import dns
+
+    conf = tmp_path / "realip.conf"
+    conf.write_text(
+        "# Managed\nset_real_ip_from 104.16.0.0/13;\nset_real_ip_from 2606:4700::/32;\n"
+        "set_real_ip_from bogus;\nreal_ip_header CF-Connecting-IP;\n"
+    )
+    ranges = dns.cloudflare_ranges(conf)
+    assert ranges == [ipaddress.ip_network("104.16.0.0/13"), ipaddress.ip_network("2606:4700::/32")]
+    assert dns.cloudflare_ranges(tmp_path / "missing") == []
+    assert dns.behind({"104.21.88.101", "2606:4700:3037::6815:5865"}, ranges)
+    assert not dns.behind({"104.21.88.101", "198.51.100.1"}, ranges)
+    assert not dns.behind({"not-an-ip"}, ranges) and not dns.behind(set(), ranges)
+    assert not dns.behind({"104.21.88.101"}, [])
+
+    tls_system["dns"]["proxied.example.com"] = {"104.21.88.101", "2606:4700:3037::6815:5865"}
+    mgr = tls_system["tls_manager"]()
+    mgr.proxy_ranges = lambda: ranges
+    result = mgr.create(CreateRequest("proxied.example.com"))
+    assert result["ssl"] == "issued"  # through the Cloudflare proxy (HTTP-01)
+
+
+def test_autossl_retry_issues_when_dns_is_ready(tls_system: dict[str, Any]) -> None:
+    from domainpilot.sites.lifecycle import CreateRequest
+
+    mgr = tls_system["tls_manager"]()
+    mgr.create(CreateRequest("example.com"))
+    mgr.create(CreateRequest("off.example.com", ssl=False))
+    assert mgr.autossl_pending(now=1000.0) == {"example.com": "waiting for DNS"}
+    tls_system["dns"]["example.com"] = {"80.241.220.98"}
+    tls_system["ca"].key_matches = False
+    assert mgr.autossl_pending(now=1000.0)["example.com"].startswith("failed")
+    tls_system["ca"].key_matches = True
+    assert mgr.autossl_pending(now=1500.0) == {}  # throttled: at most once an hour
+    assert mgr.autossl_pending(now=5000.0) == {"example.com": "issued"}
+    assert mgr.autossl_pending(now=99999.0) == {}  # done

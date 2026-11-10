@@ -421,7 +421,7 @@ def test_create_on_cloudflare_zone(cf_system: dict[str, Any]) -> None:
     from domainpilot.sites.lifecycle import CreateRequest
 
     result = cf_system["cf_manager"]().create(
-        CreateRequest("dp.example.com", aliases=["www.dp.example.com"])
+        CreateRequest("dp.example.com", aliases=["www.dp.example.com"], cloudflare=True)
     )
     assert result["cloudflare"] == "proxied through Cloudflare zone example.com"
     assert result["ssl"] == "issued"
@@ -448,9 +448,9 @@ def test_create_with_no_cloudflare_and_foreign_record(cf_system: dict[str, Any])
     plain = cf_system["cf_manager"]().create(CreateRequest("a.example.com", cloudflare=False))
     assert plain["cloudflare"] is None and cf_system["cf"].records == {}
     cf_system["cf"].add("z1", "A", "b.example.com", "198.51.100.7")
-    clash = cf_system["cf_manager"]().create(CreateRequest("b.example.com"))
+    clash = cf_system["cf_manager"]().create(CreateRequest("b.example.com", cloudflare=True))
     assert clash["cloudflare"].startswith("not configured") and len(cf_system["cf"].records) == 1
-    elsewhere = cf_system["cf_manager"]().create(CreateRequest("site.other.org"))
+    elsewhere = cf_system["cf_manager"]().create(CreateRequest("site.other.org", cloudflare=True))
     assert elsewhere["cloudflare"] is None
 
 
@@ -500,7 +500,7 @@ def test_cf_handlers(cf_system: dict[str, Any], monkeypatch: pytest.MonkeyPatch)
     from domainpilot.sites.lifecycle import CreateRequest
 
     monkeypatch.setattr(cf_handlers, "_manager", lambda ctx: cf_system["cf_manager"](ctx.dry_run))
-    cf_system["cf_manager"]().create(CreateRequest("dp.example.com"))
+    cf_system["cf_manager"]().create(CreateRequest("dp.example.com", cloudflare=True))
     ctx = _ctx(cf_system)
     res = cf_handlers.status(ctx, argparse.Namespace())
     assert res.exit_code == ExitCode.OK and res.disclaimer and "Full (strict)" in " ".join(res.text)

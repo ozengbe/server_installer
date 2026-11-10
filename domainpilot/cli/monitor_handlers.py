@@ -6,6 +6,7 @@ import argparse
 import json
 import socket
 import sys
+import time
 from pathlib import Path
 from typing import Any
 
@@ -13,7 +14,8 @@ from domainpilot.cli.context import CommandResult, Context
 from domainpilot.cli.ops_handlers import _health_report
 from domainpilot.cli.site_handlers import _domain, _manager
 from domainpilot.core import fsutil, proc
-from domainpilot.core.errors import PreconditionFailed, UsageError
+from domainpilot.core.errors import DPError, LockBusy, PreconditionFailed, UsageError
+from domainpilot.core.locks import FileLock
 from domainpilot.monitor import monitor as mon
 from domainpilot.monitor.alerts import Alert, AlertSettings, Notifier
 from domainpilot.sftp import SftpManager
@@ -110,11 +112,32 @@ def collect(ctx: Context) -> tuple[list[mon.Problem], dict[str, int]]:
     return problems, mon.restart_counts(units)
 
 
+def _autossl_retry(ctx: Context) -> None:
+    """Issue certificates for sites whose DNS became ready since creation.
+
+    Certificate issuance changes nginx and the registry, so it takes the global
+    lock; if an admin command holds it, this run simply skips (next one in 5 min).
+    """
+    try:
+        with FileLock(ctx.paths.global_lock, timeout=1):
+            results = _manager(ctx).autossl_pending(now=time.time())
+    except LockBusy:
+        return
+    except DPError as exc:
+        ctx.out.warn(f"AutoSSL retry: {exc.message}")
+        return
+    for domain, outcome in results.items():
+        if outcome != "waiting for DNS":
+            ctx.out.info(f"AutoSSL {domain}: {outcome}")
+
+
 def system_monitor(ctx: Context, args: argparse.Namespace) -> CommandResult:
     notifier = _notifier(ctx)
     monitor = mon.Monitor(
         ctx.paths.var_lib / "monitor" / "state.json", notifier, host=socket.getfqdn()
     )
+    if args.notify:  # timer mode: also finish pending AutoSSL certificates
+        _autossl_retry(ctx)
     problems, restarts = collect(ctx)
     alerts = monitor.evaluate(problems, restarts, failed_unit=args.unit_failed)
     delivery = monitor.deliver(alerts) if args.notify else {"sent": 0, "skipped": len(alerts)}

@@ -53,12 +53,19 @@ def _create_args(p: argparse.ArgumentParser) -> None:
     p.add_argument("--alias", action="append", default=[])
     p.add_argument("--upstream")
     p.add_argument("--writable-code", action="store_true")
-    p.add_argument("--no-ssl", action="store_true")
     p.add_argument(
-        "--no-cloudflare",
+        "--no-ssl",
         action="store_true",
-        help="do not create DNS records in Cloudflare for this site",
+        help="do not request a Let's Encrypt certificate (the self-signed one is still made)",
     )
+    p.add_argument(
+        "--cloudflare-dns",
+        action="store_true",
+        help="also create proxied DNS records in Cloudflare (needs a stored token); "
+        "by default DNS is left to you",
+    )
+    # Accepted for old scripts; DNS is never touched unless --cloudflare-dns is given.
+    p.add_argument("--no-cloudflare", action="store_true", help=argparse.SUPPRESS)
     p.add_argument(
         "--tenant-id",
         help="disaster recovery: reuse the id (tNNNN) the site had on the lost server",

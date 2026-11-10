@@ -72,17 +72,31 @@ sudo site example.com sftp create --key alice.pub --name alice
 
 ## 4. Certificates and Cloudflare
 
-New sites get a Let's Encrypt certificate automatically as soon as their DNS points at the server. `sudo site example.com ssl status` shows the expiry date. Renewal runs on its own, and an alert fires if a certificate gets within 14 days of expiry.
-
-If the zone is in Cloudflare, store a token once. DomainPilot then creates the site's DNS records, proxied through Cloudflare, and uses DNS validation for certificates:
+Every site gets HTTPS without any action:
+1. **At creation:** a self-signed placeholder certificate. Visitors coming through Cloudflare with SSL/TLS mode **Full** see a valid certificate, because Cloudflare's own certificate is the one they see. Direct visitors still get plain HTTP: there's no redirect to the placeholder.
+2. **When DNS points at the server**, directly or through the Cloudflare proxy: a Let's Encrypt certificate. HTTP then redirects to HTTPS. If DNS isn't ready, the self-check retries every hour.
+3. **Renewal** runs on its own. An alert fires if a certificate gets within 14 days of expiry.
 
 ```bash
-sudo site system cloudflare token add            # token is read from a hidden prompt
-sudo site example.com cloudflare status
-sudo site example.com cloudflare security        # read-only review of the zone's settings
+sudo site example.com ssl status       # self-signed placeholder or Let's Encrypt, expiry, what is missing
+sudo site example.com ssl              # request Let's Encrypt now
+sudo site example.com create --no-ssl  # only the placeholder, never Let's Encrypt
 ```
 
-The token needs `Zone - DNS - Edit` and `Zone - Zone Settings - Read` for the zones it manages. DomainPilot never changes zone settings, and it only deletes DNS records it created itself.
+**Cloudflare without any setup on the server.** Create the DNS records in Cloudflare yourself, with the proxy on, and set SSL/TLS mode to **Full**. Switch to **Full (strict)** once `ssl status` shows Let's Encrypt. DomainPilot never creates, changes or deletes DNS records unless you ask it to.
+
+**Optional: let DomainPilot manage the records.** With a stored API token, DomainPilot can:
+- create the proxied records itself (`create --cloudflare-dns`);
+- validate certificates through DNS;
+- review the zone's security settings read-only.
+
+```bash
+sudo site system cloudflare token add               # token is read from a hidden prompt
+sudo site example.com create --cloudflare-dns
+sudo site example.com cloudflare security           # read-only review of the zone's settings
+```
+
+The token needs `Zone - DNS - Edit` and `Zone - Zone Settings - Read`. DomainPilot never changes zone settings, and it only deletes DNS records it created itself.
 
 ## 5. Backups
 

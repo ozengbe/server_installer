@@ -121,6 +121,31 @@ Usage:
   sudo site system <command>                 server-wide commands
   site help | site version
 
+Common tasks (example.com = your domain):
+  Sites
+    sudo site example.com create                       PHP site (also --type static|proxy)
+    sudo site example.com create --alias www.example.com
+    sudo site example.com status | logs | disable | enable
+    sudo site example.com delete --confirm example.com  (add --purge to erase data)
+  HTTPS
+    New sites get a self-signed certificate at once (enough behind Cloudflare,
+    SSL/TLS mode "Full") and a Let's Encrypt one as soon as DNS points here
+    (directly or through the Cloudflare proxy); retried automatically.
+    sudo site example.com ssl                          get Let's Encrypt now
+    sudo site example.com ssl status | ssl renew
+  Files (SFTP, chrooted to the site)
+    sudo site example.com sftp create --key alice.pub --name alice
+    -> sftp tNNNN-deploy@server   (put the website in app/public)
+    sudo site example.com sftp list | sftp revoke alice --confirm example.com
+  Database
+    sudo site example.com db create                    then: db credentials
+  Backups and alerts
+    sudo site system backup setup --repository s3:https://... --credentials-stdin
+    sudo site example.com backup | backup list | restore --all --confirm example.com
+    echo URL | sudo site system alerts setup --kind ntfy --url-stdin
+  Server
+    sudo site system status | health | security | update --check
+
 Global options (anywhere on the line):
   --json          machine-readable output
   --dry-run       show the plan, change nothing
@@ -130,7 +155,7 @@ Global options (anywhere on the line):
 
 Help for a scope:   site example.com --help    site system --help
 Help for a command: site example.com create --help
-Documentation: docs/cli-spec.md"""
+Documentation: docs/admin-guide.md (day-to-day), docs/install.md"""
 
 
 def _confirm_destructive(

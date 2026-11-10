@@ -42,8 +42,6 @@ def _domain(ctx: Context) -> str:
 
 def create(ctx: Context, args: argparse.Namespace) -> CommandResult:
     domain = _domain(ctx)
-    if args.no_ssl:
-        ctx.out.warn("--no-ssl: certificates arrive in Phase 6; sites are HTTP-only until then")
     req = CreateRequest(
         domain=domain,
         site_type=args.site_type or ctx.config.default_site_type,
@@ -52,23 +50,28 @@ def create(ctx: Context, args: argparse.Namespace) -> CommandResult:
         tier=args.tier or ctx.config.default_tier,
         upstream=args.upstream,
         writable_code=args.writable_code,
-        cloudflare=not getattr(args, "no_cloudflare", False),
+        cloudflare=bool(getattr(args, "cloudflare_dns", False)),
+        ssl=not getattr(args, "no_ssl", False),
         tenant_id=getattr(args, "tenant_id", None),
     )
     result = _manager(ctx).create(req)
     if result["dry_run"]:
         return CommandResult(result, [f"Dry run: nothing was changed for {domain}."])
+    names = ", ".join([domain, *result["aliases"]])
+    issued = result.get("ssl") == "issued"
     text = [
         f"Created {domain} ({result['type']}) as tenant {result['tenant']}.",
+        "HTTPS: " + ("Let's Encrypt certificate" if issued else str(result.get("ssl"))),
         "Next steps:",
         (
-            f"  - Cloudflare: {result['cloudflare']}"
+            f"  - Cloudflare DNS: {result['cloudflare']}"
             if result.get("cloudflare")
-            else f"  - point DNS for {', '.join([domain, *result['aliases']])} at this server"
+            else f"  - DNS (if not done yet): A/AAAA records for {names} -> this server "
+            "(Cloudflare proxy on or off; with the proxy, use SSL/TLS mode Full)"
         ),
-        "  - upload files over SFTP (Phase 8) into the tenant's app/public directory",
+        f"  - upload files: sudo site {domain} sftp create --key <file.pub> "
+        "(files go in app/public)",
         f"  - database: sudo site {domain} db create" if result["type"] == "php" else "",
-        "  - HTTPS certificates arrive in Phase 6",
     ]
     return CommandResult(result, [line for line in text if line])
 

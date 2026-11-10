@@ -14,7 +14,7 @@ import grp
 import json
 import pwd
 import shutil
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -42,7 +42,7 @@ from domainpilot.isolation.render import render as render_tenant
 from domainpilot.optimize.site import measure_workers, recommend_limits
 from domainpilot.optimize.snapshot import SnapshotStore
 from domainpilot.sftp import SftpManager
-from domainpilot.tls import dns
+from domainpilot.tls import dns, selfsigned
 from domainpilot.tls.acme import Certbot
 from domainpilot.web.nginx import DEFAULT_HSTS, Nginx, TlsFiles, Upstream, parse_upstream
 
@@ -72,8 +72,12 @@ class CreateRequest:
     upstream: str | None = None
     writable_code: bool = False
     limits: TenantLimits = field(default_factory=TenantLimits)
-    # Manage the site's DNS in Cloudflare when its zone is reachable with a stored token.
-    cloudflare: bool = True
+    # Opt-in (--cloudflare-dns): create proxied DNS records in Cloudflare. By default
+    # DomainPilot never touches DNS: point the name at the server yourself (orange
+    # cloud on or off), like CloudPanel.
+    cloudflare: bool = False
+    # Try Let's Encrypt right after creation (--no-ssl turns AutoSSL off for the site).
+    ssl: bool = True
     # Disaster recovery: reuse the tenant id the site had on a lost server.
     tenant_id: str | None = None
 
@@ -97,6 +101,7 @@ class SiteManager:
         host_ips: Callable[[], set[str]] | None = None,
         resolver: dns.Resolver = dns.resolve,
         cloudflare: CloudflareManager | None = None,
+        proxy_ranges: Callable[[], Sequence[dns.Network]] | None = None,
     ) -> None:
         self.paths = paths
         self.host = host
@@ -113,6 +118,8 @@ class SiteManager:
         self.certbot = certbot or Certbot(run=run)
         self.host_ips = host_ips or (lambda: dns.host_addresses(run))
         self.resolver = resolver
+        self.proxy_ranges = proxy_ranges or dns.cloudflare_ranges
+        self.selfsigned_dir = self.nginx.conf_dir.parent / "selfsigned"
         self.cloudflare = cloudflare or CloudflareManager(CredentialStore(run=run))
         self.sftp = SftpManager(audit=audit, argv=argv, run=run, keys_dir=paths.ssh_keys)
 
@@ -155,14 +162,16 @@ class SiteManager:
             kind = site.site_type
             upstream = self.parse_upstream(settings["upstream"]) if kind == "proxy" else None
         tls = self._tls(site.domain, settings)
+        placeholder = None if tls else selfsigned.files(self.selfsigned_dir, site.domain)
         return self.nginx.render(
             kind,
             domain=site.domain,
             aliases=aliases,
             tenant=tenant.id,
             upstream=upstream,
-            tls=tls,
+            tls=tls or placeholder,
             hsts_max_age=int(settings.get("hsts", DEFAULT_HSTS)),
+            trusted=tls is not None,
         )
 
     def _tls(self, domain: str, settings: dict[str, Any]) -> TlsFiles | None:
@@ -263,7 +272,7 @@ class SiteManager:
                     "cache": is_php,
                     "upstream": upstream.url if upstream else None,
                     "limits": req.limits.to_dict(),
-                    "autossl": self.config.autossl,
+                    "autossl": self.config.autossl and req.ssl,
                     "tls": {"enabled": False},
                     "hsts": DEFAULT_HSTS,
                 },
@@ -285,7 +294,8 @@ class SiteManager:
         if not self.dry_run:
             self.registry.set_tenant_status(tenant.id, "active")
             cf_note = self._cloudflare_after_create(domain, tenant.id) if req.cloudflare else None
-            ssl_note = self._autossl_after_create(domain)
+            self._placeholder_after_create(domain)
+            ssl_note = self._autossl_after_create(domain, enabled=req.ssl)
         return {
             "domain": domain,
             "aliases": aliases,
@@ -315,7 +325,7 @@ class SiteManager:
                 return self.cloudflare.records_ok(ref, names, self.host_ips())
             except CloudflareError as exc:
                 return [f"Cloudflare: {exc.message}"]
-        return dns.problems(names, self.host_ips(), self.resolver)
+        return dns.problems(names, self.host_ips(), self.resolver, self.proxy_ranges())
 
     def _cloudflare_after_create(self, domain: str, tenant: str) -> str | None:
         """Point the new site's names at this server through Cloudflare (proxied).
@@ -410,16 +420,34 @@ class SiteManager:
             )
         return {"domain": domain, "actions": actions, "dry_run": self.dry_run}
 
-    def _autossl_after_create(self, domain: str) -> str:
+    def _placeholder_after_create(self, domain: str) -> None:
+        """Self-signed certificate so HTTPS answers at once (Cloudflare "Full" mode
+        works immediately). Never fails the creation."""
+        site, tenant = self.primary_site(domain)
+        try:
+            selfsigned.ensure(self.selfsigned_dir, domain, self._names(tenant.id), self.run)
+            self.nginx.apply(domain, self._render(site, tenant, enabled=site.enabled))
+        except DPError as exc:
+            if self.reporter:
+                self.reporter(f"no placeholder certificate: {exc.message}", "failed")
+            return
+        if self.reporter and selfsigned.files(self.selfsigned_dir, domain):
+            self.reporter("HTTPS enabled with a self-signed placeholder certificate", "done")
+
+    def _autossl_after_create(self, domain: str, *, enabled: bool = True) -> str:
         """Try to get a certificate for a new site. Never fails the creation."""
-        if not self.config.autossl:
-            return "autossl is off; run: sudo site " + domain + " ssl"
+        if not (self.config.autossl and enabled):
+            return f"AutoSSL is off; when ready run: sudo site {domain} ssl"
         try:
             self.ssl_issue(domain)
         except DPError as exc:
             if self.reporter:
-                self.reporter(f"no certificate yet: {exc.message}", "failed")
-            return f"not issued yet ({exc.message}); the site is served over HTTP"
+                self.reporter(f"no Let's Encrypt certificate yet: {exc.message}", "pending")
+            return (
+                f"not issued yet ({exc.message}). AutoSSL retries automatically; "
+                "until then the site uses its self-signed certificate (fine behind "
+                'Cloudflare with SSL/TLS mode "Full")'
+            )
         return "issued"
 
     # --- TLS / AutoSSL --------------------------------------------------------------
@@ -514,7 +542,13 @@ class SiteManager:
         return {
             "domain": domain,
             "autossl": bool(settings.get("autossl", False)),
-            "https": bool(self._tls(domain, settings)),
+            "https": bool(self._tls(domain, settings))
+            or selfsigned.files(self.selfsigned_dir, domain) is not None,
+            "certificate_kind": "lets-encrypt"
+            if self._tls(domain, settings)
+            else "self-signed placeholder"
+            if selfsigned.files(self.selfsigned_dir, domain)
+            else "none",
             "hsts_max_age": settings.get("hsts", DEFAULT_HSTS),
             "eligibility_problems": self._eligibility(tenant.id, names),
             "challenge": "dns-01 (Cloudflare)" if self._cf_ref(tenant.id) else "http-01",
@@ -569,6 +603,37 @@ class SiteManager:
             "ssl.revoke", argv=self.argv, outcome="success", details={"domain": domain}
         )
         return {"domain": domain, "revoked": True, "autossl": False}
+
+    def autossl_pending(self, *, now: float, every: float = 3600) -> dict[str, str]:
+        """AutoSSL retry (from the 5-minute self-check): sites with AutoSSL on and no
+        Let's Encrypt certificate yet get one as soon as their DNS is ready. Each
+        site is tried at most once per ``every`` seconds (Let's Encrypt limits
+        failed validations), and only when the DNS pre-check passes."""
+        results: dict[str, str] = {}
+        for tenant in self.registry.list_tenants():
+            if tenant.status != "active":
+                continue
+            settings = self.registry.get_tenant_settings(tenant.id)
+            primary = next(
+                (s for s in self.registry.sites_for_tenant(tenant.id) if s.is_primary), None
+            )
+            if primary is None or not settings.get("autossl") or not primary.enabled:
+                continue
+            if settings.get("tls", {}).get("enabled") and self.certbot.exists(primary.domain):
+                continue
+            tried = settings.get("autossl_tried")
+            if tried is not None and now - float(tried) < every:
+                continue
+            if self._eligibility(tenant.id, self._names(tenant.id)):
+                results[primary.domain] = "waiting for DNS"
+                continue
+            self._update_settings(tenant.id, autossl_tried=now)
+            try:
+                self.ssl_issue(primary.domain)
+                results[primary.domain] = "issued"
+            except DPError as exc:
+                results[primary.domain] = f"failed: {exc.message}"
+        return results
 
     def set_autossl(self, domain: str, on: bool) -> dict[str, Any]:
         _site, tenant = self.primary_site(domain)
@@ -734,6 +799,7 @@ class SiteManager:
 
         if tenant.status != "archived":
             self.nginx.remove(domain)
+            selfsigned.remove(self.selfsigned_dir, domain)
             if self.reporter:
                 self.reporter(f"removed nginx configuration for {domain}", "done")
             for line in self._cloudflare_cleanup(domain, tenant.id):
@@ -796,6 +862,7 @@ class SiteManager:
                 self.nginx.remove(domain)
             except OperationFailed as exc:
                 problems.append(str(exc))
+            selfsigned.remove(self.selfsigned_dir, domain)
             problems += self.provisioner.purge(tenant.id)
             shutil.rmtree(self.nginx.log_dir(tenant.id), ignore_errors=True)
             for site in self.registry.sites_for_tenant(tenant.id):
