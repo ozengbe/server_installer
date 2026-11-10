@@ -15,6 +15,18 @@ journal=$(journalctl -u 'dp-php@*' -u 'dp-cache@*' --no-pager -n 80 -o short-pre
 echo "$journal"
 annotate "diag: tenant service journal" "$(echo "$journal" | grep -viE 'Started|Starting|Stopping|Stopped|Deactivated|Consumed' | tail -n 25)"
 
+echo "== PHP-FPM logs (worker deaths, startup errors)"
+fpm=$(for f in /var/log/domainpilot/tenants/*/php-fpm.log /var/log/domainpilot/tenants/*/php-error.log; do
+  [[ -s $f ]] || continue
+  echo "--- $f"
+  tail -n 15 "$f"
+done 2>&1)
+echo "$fpm"
+annotate "diag: php-fpm logs" "$(echo "$fpm" | grep -iE '^---|WARNING|ERROR|exited|signal|fatal|unable|denied|failed' | tail -n 30)"
+fpm_journal=$(journalctl -u 'dp-php@*' --no-pager -n 400 -o cat 2>/dev/null \
+  | grep -iE 'exited|signal|fatal|unable|denied|failed|WARNING|ERROR' | sort | uniq -c | sort -rn | head -15)
+annotate "diag: php-fpm journal" "$fpm_journal"
+
 echo "== AppArmor denials"
 denials=$( { grep -h 'apparmor="DENIED"' /var/log/audit/audit.log 2>/dev/null; journalctl -k --no-pager 2>/dev/null | grep 'apparmor="DENIED"'; } )
 summary=$(echo "$denials" | grep -oE 'operation="[^"]*"|profile="[^"]*"|name="[^"]*"|requested_mask="[^"]*"|peer="[^"]*"' \

@@ -25,6 +25,8 @@ OPENSSL = "/usr/bin/openssl"
 LIVE = Path("/etc/letsencrypt/live")
 WEBROOT = Path("/var/lib/domainpilot-acme")
 CERTBOT_TIMEOUT = 300
+# Required owner of private keys (root; tests run unprivileged and override it).
+ROOT_UID = 0
 DNS_PROPAGATION_SECONDS = 30
 
 Runner = Callable[..., proc.Result]
@@ -204,7 +206,7 @@ class Certbot:
         if not cert_key.strip() or cert_key.strip() != key_pub.strip():
             raise OperationFailed(f"certificate and private key for {domain} do not match")
         st = files.key.stat()  # follows live/ -> archive/; both are root-only
-        if st.st_uid != 0 or stat.S_IMODE(st.st_mode) & 0o077:
+        if st.st_uid != ROOT_UID or stat.S_IMODE(st.st_mode) & 0o077:
             raise OperationFailed(f"private key for {domain} is readable by non-root users")
         return info
 

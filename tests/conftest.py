@@ -196,3 +196,17 @@ def system(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
         "users": users,
         "reported": reported,
     }
+
+
+@pytest.fixture(autouse=True)
+def _root_owner_is_test_user(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Checks that require root-owned files expect the test user instead.
+
+    CI runs the unit tests unprivileged, so files the tests create are owned
+    by that user; production keeps ROOT_UID = 0.
+    """
+    from domainpilot.security import site_audit
+    from domainpilot.tls import acme
+
+    monkeypatch.setattr(acme, "ROOT_UID", os.getuid())
+    monkeypatch.setattr(site_audit, "ROOT_UID", os.getuid())

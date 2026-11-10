@@ -13,5 +13,8 @@ MSYS_NO_PATHCONV=1 docker run --rm -e DEBIAN_FRONTEND=noninteractive -v "${SRC}:
   apt-get update -qq >/dev/null && apt-get install -y -qq shellcheck >/dev/null
   cp -a /ro /src && cd /src
   pip install --quiet --root-user-action=ignore --disable-pip-version-check -e ".[dev]" "ansible-lint==24.12.2" "ansible-core>=2.16,<2.17"
-  bash tools/check.sh
+  # Run unprivileged, like the GitHub runner: tests that only pass as root
+  # would otherwise go unnoticed until CI.
+  useradd -m -u 1001 runner && chown -R runner /src
+  su runner -c "cd /src && bash tools/check.sh"
 '

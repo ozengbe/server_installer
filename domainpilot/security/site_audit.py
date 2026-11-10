@@ -32,6 +32,8 @@ from domainpilot.security.report import SecurityReport
 Runner = Callable[..., proc.Result]
 SYSTEMCTL = "/usr/bin/systemctl"
 MARIADB = "/usr/bin/mariadb"
+# Owner of every tenant root (root; tests run unprivileged and override it).
+ROOT_UID = 0
 UNIT_EXPECT = {
     "NoNewPrivileges": "yes",
     "ProtectSystem": "strict",
@@ -198,7 +200,7 @@ class SiteAuditor:
             return
         # path, max mode, expected owner uid
         layout = [
-            (root, 0o750, 0),
+            (root, 0o750, ROOT_UID),
             (root / "app", 0o2750, deploy.pw_uid),
             (root / "app" / "public", 0o2750, deploy.pw_uid),
             (root / "data", 0o2770, tid.pw_uid),
