@@ -1,4 +1,4 @@
-"""Fixes from the security review of the CloudPanel-style changes."""
+"""Fixes from the security review of the site-user changes."""
 
 from __future__ import annotations
 

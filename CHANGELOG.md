@@ -37,14 +37,14 @@ First packaged release. Supports Ubuntu 24.04 and 26.04 LTS.
   - `site system backup sites` and `site <domain> create --tenant-id` for disaster recovery onto a new server;
   - the admin guide and runbooks.
 
-### Changed (Cloudflare and HTTPS, the CloudPanel way)
+### Changed (Cloudflare and HTTPS)
 - **ozenix no longer touches DNS by default.** Point the records at the server yourself, with the Cloudflare proxy on or off. Proxied DNS records are now opt-in: `create --cloudflare-dns`.
 - **Every new site gets a self-signed placeholder certificate at once**, so HTTPS works immediately behind Cloudflare (SSL/TLS mode "Full"). Plain HTTP keeps working for direct visitors until Let's Encrypt issues a real certificate.
 - **Names proxied through Cloudflare count as pointing at this server** when checking whether a certificate can be issued. The Let's Encrypt challenge passes through the proxy.
 - **AutoSSL retries automatically.** The 5-minute self-check requests the certificate once DNS is ready, at most once an hour per site.
 - `site help` lists the common tasks: sites, HTTPS, SFTP, database, backups. `--no-ssl` now works: it skips Let's Encrypt for that site.
 
-### Added (CloudPanel-style sites)
+### Added (site users and site types)
 - **Each site has its own named Linux user:** `create --user john --key john.pub`. It logs in with an SSH key, and gets SFTP and a shell in its own site. On a terminal, `create` asks for the name and key.
 - **The server's own login is left as it is:** root, passwords, your accounts. The admin list (`dp_admins`) is optional.
 - **PHP 8.2, 8.3, 8.4 and 8.5 side by side**, chosen per site (`--php`, `site <d> php <v>`). They come from ppa:ondrej/php, with its key pinned. On 26.04 only 8.5 is available until the PPA supports that release.

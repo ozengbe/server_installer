@@ -294,7 +294,7 @@ class SiteAuditor:
             threats=("TH1",),
         )
         # The runtime user (PHP) must never log in. The site user may have a shell
-        # (SSH keys only, its own site): that is the CloudPanel-style access model.
+        # (SSH keys only, its own site): that is the per-site access model.
         shells = []
         allowed = {
             t: ("/usr/sbin/nologin", "/bin/false", "/sbin/nologin"),

@@ -4,7 +4,7 @@
 
 # Optional extra administrators (SSH key + sudo), managed by the installer.
 # Empty (the default): ozenix leaves server logins (root, your own accounts)
-# exactly as they are, like CloudPanel. Sites get their own users instead.
+# exactly as they are. Sites get their own users instead.
 #   dp_admins:
 #     - name: alice
 #       ssh_keys:

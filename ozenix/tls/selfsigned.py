@@ -1,4 +1,4 @@
-"""Self-signed placeholder certificate for a new site (like CloudPanel).
+"""Self-signed placeholder certificate for a new site.
 
 Every site gets one at creation, so HTTPS answers immediately: behind
 Cloudflare with SSL/TLS mode "Full" the site works before (or without) a

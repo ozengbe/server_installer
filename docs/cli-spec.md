@@ -1,6 +1,6 @@
 # `site` CLI — Specification (Phase 1 draft)
 
-Installed at `/usr/local/bin/site`. It's a thin `#!/usr/bin/python3 -I` wrapper that imports `/usr/lib/ozenix`. The interface is inspired by Webinoly's site commands, but this is an independent implementation.
+Installed at `/usr/local/bin/site`. It's a thin `#!/usr/bin/python3 -I` wrapper that imports `/usr/lib/ozenix`.
 
 ## 1. Grammar
 

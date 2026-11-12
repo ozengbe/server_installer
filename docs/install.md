@@ -42,7 +42,7 @@ The first run creates `/etc/ozenix/install.yml`. Review it; every setting is doc
 When it finishes, the installer prints the installed version. You can show it again with `sudo site version`.
 
 **What changes, and what doesn't:**
-- **Your own login is not touched.** root, your accounts, passwords and keys stay as you configured them, as with CloudPanel. `sudo site system audit` gives warnings if root can log in with a password.
+- **Your own login is not touched.** root, your accounts, passwords and keys stay as you configured them. `sudo site system audit` gives warnings if root can log in with a password.
 - **Every site gets its own Linux user**, which you name when you create the site. That user logs in with an SSH key only, and gets SFTP and a shell in its own site.
 - **Firewall:** every inbound port is closed except 22, 80 and 443 (plus WireGuard if configured), on IPv4 and IPv6.
 

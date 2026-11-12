@@ -1,4 +1,4 @@
-"""Site users (CloudPanel-style): each site has its own named Linux user that
+"""Site users: each site has its own named Linux user that
 logs in with an SSH key (SFTP + shell) and owns the site's code."""
 
 from __future__ import annotations

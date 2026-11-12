@@ -44,7 +44,7 @@ def _domain(ctx: Context) -> str:
 def _site_login(ctx: Context, args: argparse.Namespace) -> tuple[str | None, str | None]:
     """The site's own user and its SSH key (`--user`, `--key`/`--key-stdin`).
 
-    On a terminal, missing values are asked for (like CloudPanel's form). In
+    On a terminal, missing values are asked for. In
     scripts they are optional: without them the site gets the automatic user
     `<tid>-deploy` and keys can be added later with `sftp create`.
     """

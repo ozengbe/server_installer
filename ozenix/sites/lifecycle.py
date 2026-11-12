@@ -127,7 +127,7 @@ class CreateRequest:
     limits: TenantLimits = field(default_factory=TenantLimits)
     # Opt-in (--cloudflare-dns): create proxied DNS records in Cloudflare. By default
     # ozenix never touches DNS: point the name at the server yourself (orange
-    # cloud on or off), like CloudPanel.
+    # cloud on or off).
     cloudflare: bool = False
     # Try Let's Encrypt right after creation (--no-ssl turns AutoSSL off for the site).
     ssl: bool = True

@@ -210,7 +210,7 @@ def run_as_site_user(env: dict[str, Any], command: str) -> subprocess.CompletedP
 
 
 def test_site_user_ssh_sftp_and_escapes(environment: dict[str, Any]) -> None:
-    """CloudPanel-style site user: SSH key login with SFTP and a shell in its own
+    """Site user: SSH key login with SFTP and a shell in its own
     site; other sites and host secrets stay unreachable; no tunnels."""
     env, tenant = environment, environment["tenant"]
     key = env["work"] / "key"
