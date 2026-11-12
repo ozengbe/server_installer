@@ -28,9 +28,9 @@ for svc in nginx mariadb fail2ban auditd apparmor; do
 done
 check "service:ssh" ssh_up
 check "nginx:config" nginx -t -q
-check "firewall:table" nft list table inet domainpilot
+check "firewall:table" nft list table inet ozenix
 check "mariadb:socket" test -S /run/mysqld/mysqld.sock
-[[ -e /var/lib/domainpilot/firewall/pending ]] && warns+=("firewall:unconfirmed-change")
+[[ -e /var/lib/ozenix/firewall/pending ]] && warns+=("firewall:unconfirmed-change")
 [[ -e /run/reboot-required ]] && warns+=("reboot-required")
 # Certificates expiring within 14 days (renewal should have happened at 30).
 for cert in /etc/letsencrypt/live/*/cert.pem; do

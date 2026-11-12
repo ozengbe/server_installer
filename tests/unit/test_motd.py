@@ -1,4 +1,4 @@
-"""The Ozenix welcome screen (update-motd script) renders and runs cleanly.
+"""The ozenix welcome screen (update-motd script) renders and runs cleanly.
 
 It runs as root on every SSH login, so a quoting mistake would print garbage
 (or nothing) for every admin.
@@ -38,7 +38,7 @@ def test_welcome_screen(tmp_path: Path) -> None:
     assert "\\n" not in out  # no escape printed literally
     assert "Documentation: https://ozenix.org" in out
     assert "buy me a coffee: https://buymeacoffee.com/example" in out
-    assert "sudo site example.com create" in out and "site help" in out
+    assert "create --user john --key john.pub" in out and "site help" in out
     assert "Let's Encrypt" in out
 
 

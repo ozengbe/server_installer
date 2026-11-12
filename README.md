@@ -1,4 +1,4 @@
-# Ozenix Secure Server Management Platform
+# ozenix Secure Server Management Platform
 
 A secure-by-default web server manager for Ubuntu 24.04 and 26.04 LTS: Ansible-hardened hosts, strict per-tenant isolation, and a `site` CLI.
 
@@ -32,7 +32,7 @@ Design and development:
 | Unsigned test build of a release tarball | `bash tools/release.sh --snapshot` |
 
 CI (`.github/workflows/ci.yml`) runs the same checks, then the integration tests on a disposable `ubuntu-24.04` runner.
-Integration tests refuse to run on any host without the `/etc/domainpilot-test-vm` marker. **Never create that marker on a production server.**
+Integration tests refuse to run on any host without the `/etc/ozenix-test-vm` marker. **Never create that marker on a production server.**
 
 Priorities: Security → Isolation → Reliability → Maintainability → Performance → Ease of use.
 
@@ -67,9 +67,9 @@ sudo site example.com isolation audit | isolation test   # live escape attempts 
 sudo site system alerts test|status | system monitor [--notify] | system logs [--audit|--errors] [-n N]
 ```
 
-Every command takes `--json`, `--dry-run` (mutating commands) and `--help`. New sites get a certificate automatically (AutoSSL) as soon as their DNS points at the server; until then they are served over HTTP. Settings: `[ssl] email`, `staging`, `autossl` in `/etc/domainpilot/domainpilot.toml`. Commands from later phases are registered and say which phase adds them.
+Every command takes `--json`, `--dry-run` (mutating commands) and `--help`. New sites get a certificate automatically (AutoSSL) as soon as their DNS points at the server; until then they are served over HTTP. Settings: `[ssl] email`, `staging`, `autossl` in `/etc/ozenix/ozenix.toml`. Commands from later phases are registered and say which phase adds them.
 
-Layout on a server: the package lives in `/usr/lib/domainpilot/releases/<version>/` (`current` points at the active one) and the wrapper at `/usr/local/bin/site` ([bin/site](bin/site)), which runs Python in isolated mode (`-I`). The runtime uses only the standard library. Core modules are in [domainpilot/core/](domainpilot/core/):
+Layout on a server: the package lives in `/usr/lib/ozenix/releases/<version>/` (`current` points at the active one) and the wrapper at `/usr/local/bin/site` ([bin/site](bin/site)), which runs Python in isolated mode (`-I`). The runtime uses only the standard library. Core modules are in [ozenix/core/](ozenix/core/):
 
 | Module | Role |
 |---|---|

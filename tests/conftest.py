@@ -9,9 +9,9 @@ from typing import Any
 
 import pytest
 
-from domainpilot.cli.main import main
-from domainpilot.core.paths import Paths
-from domainpilot.core.sysinfo import SystemProbe
+from ozenix.cli.main import main
+from ozenix.core.paths import Paths
+from ozenix.core.sysinfo import SystemProbe
 
 
 class FakeProbe(SystemProbe):
@@ -95,13 +95,13 @@ import os  # noqa: E402
 import pwd  # noqa: E402
 import socket  # noqa: E402
 
-from domainpilot.core import proc  # noqa: E402
-from domainpilot.core.audit import AuditLog  # noqa: E402
-from domainpilot.core.config import HostFacts  # noqa: E402
-from domainpilot.core.errors import OperationFailed  # noqa: E402
-from domainpilot.core.registry import Registry  # noqa: E402
-from domainpilot.sites.lifecycle import SiteManager  # noqa: E402
-from domainpilot.web.nginx import Nginx, parse_upstream  # noqa: E402
+from ozenix.core import proc  # noqa: E402
+from ozenix.core.audit import AuditLog  # noqa: E402
+from ozenix.core.config import HostFacts  # noqa: E402
+from ozenix.core.errors import OperationFailed  # noqa: E402
+from ozenix.core.registry import Registry  # noqa: E402
+from ozenix.sites.lifecycle import SiteManager  # noqa: E402
+from ozenix.web.nginx import Nginx, parse_upstream  # noqa: E402
 
 SITE_HOST = HostFacts(release="26.04", default_php_version="8.5", php_versions=("8.5",))
 
@@ -121,6 +121,7 @@ def system(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
         paths.systemd,
         paths.apparmor,
         paths.run,
+        paths.system_etc,
     ):
         d.mkdir(parents=True, mode=0o755)
     calls: list[list[str]] = []
@@ -205,8 +206,8 @@ def _root_owner_is_test_user(monkeypatch: pytest.MonkeyPatch) -> None:
     CI runs the unit tests unprivileged, so files the tests create are owned
     by that user; production keeps ROOT_UID = 0.
     """
-    from domainpilot.security import site_audit
-    from domainpilot.tls import acme
+    from ozenix.security import site_audit
+    from ozenix.tls import acme
 
     monkeypatch.setattr(acme, "ROOT_UID", os.getuid())
     monkeypatch.setattr(site_audit, "ROOT_UID", os.getuid())

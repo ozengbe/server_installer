@@ -1,9 +1,9 @@
-# Managed by Ozenix (role backup). Nightly backup of every site and of the
+# Managed by ozenix (role backup). Nightly backup of every site and of the
 # server configuration (`site system backup`). Does nothing until a target is
 # configured with `site system backup setup`.
 [Unit]
-Description=Ozenix nightly backup
-ConditionPathExists=/etc/domainpilot/backup.json
+Description=ozenix nightly backup
+ConditionPathExists=/etc/ozenix/backup.json
 After=network-online.target mariadb.service
 Wants=network-online.target
 

@@ -16,8 +16,8 @@ import pytest
 pytestmark = pytest.mark.integration
 
 DPFW = "/usr/local/sbin/dp-firewall"
-CANDIDATE = Path("/etc/domainpilot/firewall/domainpilot.nft")
-PENDING = Path("/var/lib/domainpilot/firewall/pending")
+CANDIDATE = Path("/etc/ozenix/firewall/ozenix.nft")
+PENDING = Path("/var/lib/ozenix/firewall/pending")
 
 
 def run(*args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
@@ -25,7 +25,7 @@ def run(*args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
 
 
 def live_table() -> str:
-    return run("/usr/sbin/nft", "list", "table", "inet", "domainpilot").stdout
+    return run("/usr/sbin/nft", "list", "table", "inet", "ozenix").stdout
 
 
 def _strip_counters(ruleset: str) -> str:
@@ -51,23 +51,19 @@ def sshd_effective() -> dict[str, str]:
 @pytest.mark.parametrize(
     ("key", "expected"),
     [
-        ("permitrootlogin", "no"),
-        ("passwordauthentication", "no"),
-        ("kbdinteractiveauthentication", "no"),
-        ("authenticationmethods", "publickey"),
-        ("authorizedkeysfile", "/etc/ssh/authorized_keys.d/%u"),
-        ("allowgroups", "dp-admins dp-sftp"),
-        ("x11forwarding", "no"),
-        ("allowagentforwarding", "no"),
-        ("allowtcpforwarding", "no"),
-        ("permittunnel", "no"),
+        # The server's own login (root, passwords) is the owner's choice and is
+        # not asserted here; ozenix only adds the site-user key location.
+        ("permitemptypasswords", "no"),
         ("permituserenvironment", "no"),
         ("subsystem", "sftp internal-sftp"),
-        ("maxauthtries", "3"),
     ],
 )
 def test_sshd_effective_setting(sshd_effective: dict[str, str], key: str, expected: str) -> None:
     assert sshd_effective.get(key) == expected
+
+
+def test_site_user_keys_are_read_from_root_owned_dir(sshd_effective: dict[str, str]) -> None:
+    assert "/etc/ssh/authorized_keys.d/%u" in sshd_effective["authorizedkeysfile"].split()
 
 
 def test_sshd_has_no_weak_algorithms(sshd_effective: dict[str, str]) -> None:
@@ -82,13 +78,13 @@ def test_sshd_config_is_valid() -> None:
 
 
 def test_sudoers_valid_and_scoped() -> None:
-    # Validate Ozenix's own file. `visudo -c` would also judge files other
+    # Validate ozenix's own file. `visudo -c` would also judge files other
     # tools installed (e.g. CI runner images), which is not what this tests.
-    result = run("/usr/sbin/visudo", "-cf", "/etc/sudoers.d/90-domainpilot", check=False)
+    result = run("/usr/sbin/visudo", "-cf", "/etc/sudoers.d/90-ozenix", check=False)
     assert result.returncode == 0, result.stdout + result.stderr
-    text = Path("/etc/sudoers.d/90-domainpilot").read_text(encoding="utf-8")
+    text = Path("/etc/sudoers.d/90-ozenix").read_text(encoding="utf-8")
     assert "%dp-admins ALL=(ALL:ALL)" in text
-    assert Path("/etc/sudoers.d/90-domainpilot").stat().st_mode & 0o777 == 0o440
+    assert Path("/etc/sudoers.d/90-ozenix").stat().st_mode & 0o777 == 0o440
 
 
 def test_authorized_keys_root_owned() -> None:
@@ -127,7 +123,7 @@ def test_sysctl(key: str, expected: str) -> None:
 
 def test_firewall_default_deny_both_families() -> None:
     table = live_table()
-    assert "table inet domainpilot" in table  # inet = IPv4 and IPv6 in one policy
+    assert "table inet ozenix" in table  # inet = IPv4 and IPv6 in one policy
     assert "hook input priority filter; policy drop;" in table
     assert "hook forward priority filter; policy drop;" in table
 
@@ -140,7 +136,7 @@ def test_firewall_persisted_equals_candidate() -> None:
 def test_firewall_rejects_invalid_candidate(tmp_path: Path) -> None:
     before = _strip_counters(live_table())
     bad = tmp_path / "bad.nft"
-    bad.write_text("table inet domainpilot { chain input { this is not nft } }\n", encoding="utf-8")
+    bad.write_text("table inet ozenix { chain input { this is not nft } }\n", encoding="utf-8")
     result = run(DPFW, "apply", str(bad), "--timeout", "5", check=False)
     assert result.returncode != 0
     assert not PENDING.exists()

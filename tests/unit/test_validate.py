@@ -5,8 +5,8 @@ import re
 
 import pytest
 
-from domainpilot.core import validate
-from domainpilot.core.errors import ValidationError
+from ozenix.core import validate
+from ozenix.core.errors import ValidationError
 
 # Payloads that must never be accepted as a domain (injection, traversal,
 # confusion with flags, templates, SQL, control characters).

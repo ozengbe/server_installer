@@ -11,14 +11,14 @@ from typing import Any
 
 import pytest
 
-from domainpilot.core import proc
-from domainpilot.core.config import HostFacts, load_host
-from domainpilot.core.errors import OperationFailed, PreconditionFailed, ValidationError
-from domainpilot.core.paths import Paths
-from domainpilot.isolation import db, fcgi, status
-from domainpilot.isolation.limits import TenantLimits
-from domainpilot.isolation.provision import Provisioner
-from domainpilot.isolation.render import TenantSpec, render
+from ozenix.core import proc
+from ozenix.core.config import HostFacts, load_host
+from ozenix.core.errors import OperationFailed, PreconditionFailed, ValidationError
+from ozenix.core.paths import Paths
+from ozenix.isolation import db, fcgi, status
+from ozenix.isolation.limits import TenantLimits
+from ozenix.isolation.provision import Provisioner
+from ozenix.isolation.render import TenantSpec, render
 
 HOST = HostFacts(release="26.04", default_php_version="8.5", php_versions=("8.5",))
 
@@ -85,7 +85,7 @@ def test_render_all_files(tmp_path: Path) -> None:
     assert "shell_exec" in php and "pcre.jit] = off" in php
     assert files["php-fpm.conf"].mode == 0o640 and files["php-fpm.conf"].group_is_tenant
     aa = files["tenant-t0001"].content
-    assert "profile domainpilot-tenant-t0001" in aa and "/usr/bin/valkey-server mr," in aa
+    assert "profile ozenix-tenant-t0001" in aa and "/usr/bin/valkey-server mr," in aa
     assert "t0002" not in aa
     sl = files["dptenants-t0001.slice"].content
     assert "MemoryMax=1024M" in sl and "CPUQuota=100%" in sl and "TasksMax=256" in sl
@@ -232,9 +232,9 @@ def test_fcgi_closed_connection(tmp_path: Path) -> None:
 
 def test_apparmor_mode(tmp_path: Path) -> None:
     f = tmp_path / "profiles"
-    f.write_text("domainpilot-tenant-t0001 (enforce)\nnginx (complain)\n")
-    assert status.apparmor_mode("domainpilot-tenant-t0001", f) == "enforce"
-    assert status.apparmor_mode("domainpilot-tenant-t0002", f) == "not loaded"
+    f.write_text("ozenix-tenant-t0001 (enforce)\nnginx (complain)\n")
+    assert status.apparmor_mode("ozenix-tenant-t0001", f) == "enforce"
+    assert status.apparmor_mode("ozenix-tenant-t0002", f) == "not loaded"
     assert status.apparmor_mode("x", tmp_path / "missing") == "unknown"
 
 
@@ -305,6 +305,7 @@ def fake_system(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Paths,
         paths.systemd,
         paths.apparmor,
         paths.run,
+        paths.system_etc,
     ):
         d.mkdir(parents=True, mode=0o755)
     calls: list[list[str]] = []
@@ -366,6 +367,7 @@ def test_provision_plan_and_execution(fake_system: tuple[Paths, list[list[str]]]
         "group",
         "runtime-user",
         "deploy-user",
+        "site-user-limits",
         "web-server-access",
         "directories",
         "configuration",

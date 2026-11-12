@@ -1,17 +1,15 @@
-Match Group dp-admins
-    AllowTcpForwarding {{ dp_admin_tcp_forwarding }}
-
-# Tenant SFTP (deploy users, `site <d> sftp create`). The chroot is the tenant
-# root /srv/tenants/<tid> (the deploy user's home): root-owned, 0750, so the
-# user sees only app/ and data/ of its own site. umask 027: the web server and
-# PHP read uploads through the tenant group; nobody else can.
+# Site users (`site <domain> create --user NAME --key FILE`): SSH keys only,
+# a shell and SFTP in their own site, no tunnels or forwarding of any kind.
+# Their home is the site root /srv/tenants/<tid> (root-owned), so they cannot
+# create ~/.ssh: keys come only from /etc/ssh/authorized_keys.d/<user>.
 Match Group dp-sftp
-    ForceCommand internal-sftp -l INFO -d /app -u 0027
-    ChrootDirectory %h
+    PasswordAuthentication no
+    KbdInteractiveAuthentication no
+    AuthenticationMethods publickey
     PermitListen none
     PermitOpen none
-    PermitTTY no
     AllowTcpForwarding no
+    AllowStreamLocalForwarding no
     AllowAgentForwarding no
     X11Forwarding no
     PermitTunnel no

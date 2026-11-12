@@ -1,7 +1,7 @@
-# Managed by Ozenix (role monitoring). Self-check: health, sites, backups,
+# Managed by ozenix (role monitoring). Self-check: health, sites, backups,
 # crash restarts. Alerts only on change (`site system monitor --notify`).
 [Unit]
-Description=Ozenix self-monitoring
+Description=ozenix self-monitoring
 After=network-online.target
 
 [Service]

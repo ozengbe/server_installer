@@ -22,7 +22,7 @@ import pytest
 
 NAME = os.environ.get("DP_TEST_ACME_NAME", "")
 SITE = "/usr/local/bin/site"
-CONFIG = Path("/etc/domainpilot/domainpilot.toml")
+CONFIG = Path("/etc/ozenix/ozenix.toml")
 
 pytestmark = [
     pytest.mark.integration,
@@ -73,7 +73,7 @@ def http_get(name: str, path: str = "/") -> tuple[int, dict[str, str]]:
 
 @pytest.fixture(scope="module")
 def created() -> Iterator[dict[str, Any]]:
-    assert Path("/etc/domainpilot-test-vm").is_file(), "test host only"
+    assert Path("/etc/ozenix-test-vm").is_file(), "test host only"
     backup = CONFIG.read_bytes() if CONFIG.exists() else None
     CONFIG.write_text("[ssl]\nstaging = true\nautossl = true\n")  # never touch production CA
     site(NAME, "delete", "--purge", "--confirm", NAME)
@@ -125,7 +125,7 @@ def test_https_serves_staging_certificate(created: dict[str, Any]) -> None:
 def test_http_redirects_but_still_answers_acme(created: dict[str, Any]) -> None:
     status, headers = http_get(NAME, "/some/page?x=1")
     assert status == 301 and headers["location"] == f"https://{NAME}/some/page?x=1"
-    token_dir = Path("/var/lib/domainpilot-acme/.well-known/acme-challenge")
+    token_dir = Path("/var/lib/ozenix-acme/.well-known/acme-challenge")
     token_dir.mkdir(parents=True, exist_ok=True)
     token = token_dir / "dp-test-token"
     token.write_text("dp-test")
@@ -151,7 +151,7 @@ def test_renewal_infrastructure(created: dict[str, Any]) -> None:
         ["/usr/bin/systemctl", "is-active", "certbot.timer"], capture_output=True, text=True
     )
     assert timer.stdout.strip() == "active"
-    hook = Path("/etc/letsencrypt/renewal-hooks/deploy/50-domainpilot-nginx")
+    hook = Path("/etc/letsencrypt/renewal-hooks/deploy/50-ozenix-nginx")
     assert hook.is_file() and os.access(hook, os.X_OK)
 
 
@@ -167,8 +167,9 @@ def test_revoke_returns_to_http(created: dict[str, Any]) -> None:
     assert site(NAME, "ssl", "revoke").returncode == 6  # destructive: needs --confirm
     result = site_json(NAME, "ssl", "revoke", "--confirm", NAME)
     assert result["revoked"] and result["autossl"] is False
-    assert http_get(NAME)[0] == 200  # plain HTTP again
-    with pytest.raises(ssl.SSLError):
-        tls_handshake(NAME)  # default server rejects the handshake
+    assert http_get(NAME)[0] == 200  # plain HTTP again (no redirect)
     st = site_json(NAME, "ssl", "status")
-    assert st["certificate"] is None and not st["https"]
+    # Back on the self-signed placeholder (if the site had one): HTTPS still
+    # answers for Cloudflare "Full", but no Let's Encrypt certificate remains.
+    assert st["certificate"] is None
+    assert st["certificate_kind"] in ("self-signed placeholder", "none")

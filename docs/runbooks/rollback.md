@@ -9,7 +9,7 @@ Find the row that matches what went wrong. Start at the top: the cheapest fixes 
 | `site system optimize --apply` | `sudo site system optimize --history`, then `sudo site system optimize --rollback <ID>` |
 | A PHP version change broke the site | `sudo site example.com php <previous version>` |
 | A bad restore | The replaced tree is kept next to the staging copy (see [restore.md](restore.md#undo-a-restore)) |
-| An Ozenix upgrade broke something | [§ Upgrade](#upgrade) |
+| An ozenix upgrade broke something | [§ Upgrade](#upgrade) |
 
 Every rollback is written to the audit log: `sudo site system logs --audit`.
 
@@ -19,8 +19,8 @@ Pending changes roll back automatically. To roll back right away, run `sudo dp-f
 
 If a **confirmed** change locks you out:
 1. Log in through the provider console.
-2. Run `sudo nft delete table inet domainpilot`. This removes Ozenix's firewall and leaves the host **open**.
-3. Fix `/etc/domainpilot/install.yml`, then run `sudo installer/install.sh`.
+2. Run `sudo nft delete table inet ozenix`. This removes ozenix's firewall and leaves the host **open**.
+3. Fix `/etc/ozenix/install.yml`, then run `sudo installer/install.sh`.
 4. Confirm from a new SSH session.
 
 ## Upgrade
@@ -28,8 +28,8 @@ If a **confirmed** change locks you out:
 1. **Find out what changed.**
    ```bash
    sudo site version
-   sudo tail -n 3 /var/lib/domainpilot/release-history.jsonl
-   sudo ls -1t /var/backups/domainpilot/
+   sudo tail -n 3 /var/lib/ozenix/release-history.jsonl
+   sudo ls -1t /var/backups/ozenix/
    ```
 2. **Try a re-run of the new release first.** Most failures are an interrupted run, and the installer is idempotent: `sudo installer/install.sh`.
 3. **If you must go back to the previous release:**
@@ -38,16 +38,16 @@ If a **confirmed** change locks you out:
       ```bash
       sudo systemctl stop dp-backup.timer dp-monitor.timer
       ```
-   3. Restore the pre-upgrade snapshot. This replaces Ozenix's state with the copy taken just before the upgrade.
+   3. Restore the pre-upgrade snapshot. This replaces ozenix's state with the copy taken just before the upgrade.
       ```bash
-      SNAP=/var/backups/domainpilot/pre-upgrade-<from>-to-<to>-<time>.tar.gz
+      SNAP=/var/backups/ozenix/pre-upgrade-<from>-to-<to>-<time>.tar.gz
       sudo tar -tzf "$SNAP" | head          # look first
       sudo tar -xzf "$SNAP" -C / --exclude=registry.sqlite3 --exclude='./registry.sqlite3'
-      sudo tar -xzf "$SNAP" -C /var/lib/domainpilot ./registry.sqlite3
+      sudo tar -xzf "$SNAP" -C /var/lib/ozenix ./registry.sqlite3
       ```
    4. Install the previous release over the newer one:
       ```bash
-      cd domainpilot-<previous-version>
+      cd ozenix-<previous-version>
       sudo installer/install.sh --allow-downgrade
       ```
    5. Check, then start the timers again:
@@ -70,4 +70,4 @@ Do the backup **before** step 3 if you can.
 
 ## Configuration file by hand
 
-Every file Ozenix writes has a `Managed by Ozenix` header. Your edits are overwritten by the next install. Put lasting changes in `/etc/domainpilot/install.yml`, then run `sudo installer/install.sh`.
+Every file ozenix writes has a `Managed by ozenix` header. Your edits are overwritten by the next install. Put lasting changes in `/etc/ozenix/install.yml`, then run `sudo installer/install.sh`.

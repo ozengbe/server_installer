@@ -1,4 +1,4 @@
-# Managed by Ozenix (role sysctl). Local changes will be overwritten.
+# Managed by ozenix (role sysctl). Local changes will be overwritten.
 {% for key, value in sysctl_required.items() %}
 {{ key }} = {{ value }}
 {% endfor %}
@@ -21,3 +21,9 @@ net.ipv6.conf.all.accept_redirects = 0
 net.ipv6.conf.default.accept_redirects = 0
 net.ipv6.conf.all.accept_source_route = 0
 net.ipv6.conf.default.accept_source_route = 0
+
+# Site app ports (10000 + site number, Node.js/Python sites) are privileged:
+# only each site's own app service (CAP_NET_BIND_SERVICE + SocketBindAllow
+# for exactly its port) may listen there, so no other site or shell user can
+# take over a stopped app's port. Applies to IPv4 and IPv6.
+net.ipv4.ip_unprivileged_port_start = 20000

@@ -1,15 +1,15 @@
-# Ozenix administrator guide
+# ozenix administrator guide
 
-This guide is for the people who run an Ozenix server day to day. First-time setup is covered in [install.md](install.md). For emergencies, use the [runbooks](#runbooks).
+This guide is for the people who run an ozenix server day to day. First-time setup is covered in [install.md](install.md). For emergencies, use the [runbooks](#runbooks).
 
 ## 1. What runs where
 
 | Thing | Where | Notes |
 |---|---|---|
-| `site` command | `/usr/local/bin/site` → `/usr/lib/domainpilot/current` | Root-only tool. Every change is recorded in `/var/log/domainpilot/audit.jsonl`, which is append-only. |
-| Settings | `/etc/domainpilot/install.yml` (installer), `/etc/domainpilot/domainpilot.toml` (CLI) | Change the installer settings, then re-run the installer. |
-| Secrets | `/etc/domainpilot/secrets/` | Encrypted with this host's key. Useless on any other machine. |
-| State | `/var/lib/domainpilot/` | Registry (sites and tenants), release record, backup state |
+| `site` command | `/usr/local/bin/site` → `/usr/lib/ozenix/current` | Root-only tool. Every change is recorded in `/var/log/ozenix/audit.jsonl`, which is append-only. |
+| Settings | `/etc/ozenix/install.yml` (installer), `/etc/ozenix/ozenix.toml` (CLI) | Change the installer settings, then re-run the installer. |
+| Secrets | `/etc/ozenix/secrets/` | Encrypted with this host's key. Useless on any other machine. |
+| State | `/var/lib/ozenix/` | Registry (sites and tenants), release record, backup state |
 | Sites | `/srv/tenants/<tNNNN>/` | `app/` code (deploy user), `data/` uploads (PHP may write), `tmp/` scratch |
 | Per-site services | `dp-php@<tNNNN>`, `dp-cache@<tNNNN>` | Sandboxed by systemd, AppArmor, cgroups and nftables. One set per site. |
 | Timers | `dp-backup.timer` (nightly), `dp-backup-drill.timer` (Sunday), `dp-monitor.timer` (every 5 min), certificate renewal, unattended-upgrades | `systemctl list-timers 'dp-*'` |
@@ -83,9 +83,9 @@ sudo site example.com ssl              # request Let's Encrypt now
 sudo site example.com create --no-ssl  # only the placeholder, never Let's Encrypt
 ```
 
-**Cloudflare without any setup on the server.** Create the DNS records in Cloudflare yourself, with the proxy on, and set SSL/TLS mode to **Full**. Switch to **Full (strict)** once `ssl status` shows Let's Encrypt. Ozenix never creates, changes or deletes DNS records unless you ask it to.
+**Cloudflare without any setup on the server.** Create the DNS records in Cloudflare yourself, with the proxy on, and set SSL/TLS mode to **Full**. Switch to **Full (strict)** once `ssl status` shows Let's Encrypt. ozenix never creates, changes or deletes DNS records unless you ask it to.
 
-**Optional: let Ozenix manage the records.** With a stored API token, Ozenix can:
+**Optional: let ozenix manage the records.** With a stored API token, ozenix can:
 - create the proxied records itself (`create --cloudflare-dns`);
 - validate certificates through DNS;
 - review the zone's security settings read-only.
@@ -96,7 +96,7 @@ sudo site example.com create --cloudflare-dns
 sudo site example.com cloudflare security           # read-only review of the zone's settings
 ```
 
-The token needs `Zone - DNS - Edit` and `Zone - Zone Settings - Read`. Ozenix never changes zone settings, and it only deletes DNS records it created itself.
+The token needs `Zone - DNS - Edit` and `Zone - Zone Settings - Read`. ozenix never changes zone settings, and it only deletes DNS records it created itself.
 
 ## 5. Backups
 
@@ -124,7 +124,7 @@ Restoring, and moving sites to a new server: [runbooks/restore.md](runbooks/rest
 | Ubuntu security updates | Automatic, daily at `dp_updates_window_start`. Never reboots. |
 | Everything else (nginx.org releases, PHP minor versions, kernel) | `sudo site system update --check`, then `sudo site system update` in a maintenance window |
 | Reboot | When `site system health` reports `reboot-required`, in a window you choose |
-| Ozenix itself | [upgrade.md](upgrade.md) |
+| ozenix itself | [upgrade.md](upgrade.md) |
 
 ```bash
 sudo site system update --history
@@ -144,8 +144,8 @@ sudo site system optimize --history       # every applied change can be rolled b
 
 | Who | How they get in |
 |---|---|
-| Admins | SSH key only, listed in `dp_admins` in `/etc/domainpilot/install.yml`. Members of `dp-admins`, sudo. |
-| Site owners | SFTP only, chrooted to their own site, no shell. Keys via `site <domain> sftp create`. |
+| You (root / your accounts) | Unchanged: ozenix does not modify your login. Optional extra admins via `dp_admins`. |
+| Site users | One Linux user per site (`create --user`): SSH keys only, SFTP and a shell in their own site. More keys via `site <domain> sftp create`. |
 
 Adding and removing admins: [install.md § Common changes](install.md#common-changes). Rotating keys: [runbooks/key-rotation.md](runbooks/key-rotation.md).
 
@@ -154,8 +154,8 @@ The firewall allows only 22, 80 and 443. Changes are applied with an automatic r
 ## 9. Logs
 
 ```bash
-sudo site system logs --audit -n 50       # who did what with Ozenix
-sudo site system logs --errors            # warnings and errors from Ozenix's services
+sudo site system logs --audit -n 50       # who did what with ozenix
+sudo site system logs --errors            # warnings and errors from ozenix's services
 sudo site example.com logs --php          # one site's PHP errors
 ```
 

@@ -1,21 +1,21 @@
 #!/bin/bash
-# dp-firewall - apply Ozenix nftables changes with automatic rollback.
+# dp-firewall - apply ozenix nftables changes with automatic rollback.
 #
 #   dp-firewall apply FILE [--timeout SECONDS]   validate, apply, arm rollback timer
 #   dp-firewall confirm                          keep the change and persist it
 #   dp-firewall rollback                         restore the previous ruleset now
 #   dp-firewall status                           show pending state
 #
-# Only the "inet domainpilot" table is managed; other tables (e.g. fail2ban's)
+# Only the "inet ozenix" table is managed; other tables (e.g. fail2ban's)
 # are never touched. The change is written to /etc/nftables.conf ONLY on
 # confirm, so a reboot before confirmation also reverts it.
 set -euo pipefail
 umask 077
 export PATH=/usr/sbin:/usr/bin:/sbin:/bin LC_ALL=C
 
-STATE=/var/lib/domainpilot/firewall
+STATE=/var/lib/ozenix/firewall
 LIVE_CONF=/etc/nftables.conf
-TABLE=(inet domainpilot)
+TABLE=(inet ozenix)
 UNIT=dp-firewall-rollback
 SELF=/usr/local/sbin/dp-firewall
 

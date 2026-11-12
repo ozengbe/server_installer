@@ -16,8 +16,8 @@
 
 - name: Render candidate ruleset (validated with nft -c)
   ansible.builtin.template:
-    src: domainpilot.nft.j2
-    dest: /etc/domainpilot/firewall/domainpilot.nft
+    src: ozenix.nft.j2
+    dest: /etc/ozenix/firewall/ozenix.nft
     owner: root
     group: root
     mode: "0600"
@@ -28,12 +28,12 @@
     path: "{{ item }}"
     checksum_algorithm: sha256
   loop:
-    - /etc/domainpilot/firewall/domainpilot.nft
+    - /etc/ozenix/firewall/ozenix.nft
     - /etc/nftables.conf
   register: dp_fw_files
 
 - name: Check that the live table exists
-  ansible.builtin.command: /usr/sbin/nft list table inet domainpilot
+  ansible.builtin.command: /usr/sbin/nft list table inet ozenix
   register: dp_fw_live
   changed_when: false
   failed_when: false
@@ -50,11 +50,11 @@
   block:
     - name: Apply candidate (rollback armed)
       ansible.builtin.command: >-
-        /usr/local/sbin/dp-firewall apply /etc/domainpilot/firewall/domainpilot.nft
+        /usr/local/sbin/dp-firewall apply /etc/ozenix/firewall/ozenix.nft
         --timeout {{ dp_firewall_confirm_timeout | int }}
       changed_when: true
 
-    - name: Disable ufw (Ozenix manages nftables directly)
+    - name: Disable ufw (ozenix manages nftables directly)
       ansible.builtin.command: /usr/sbin/ufw disable
       when: "'ufw' in ansible_facts['packages'] | default({})"
       register: dp_ufw

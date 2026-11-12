@@ -1,7 +1,7 @@
-# Managed by Ozenix (role monitoring). Started by OnFailure= of watched
+# Managed by ozenix (role monitoring). Started by OnFailure= of watched
 # services once systemd has given up restarting them: alert immediately.
 [Unit]
-Description=Ozenix alert for failed unit %i
+Description=ozenix alert for failed unit %i
 After=network-online.target
 
 [Service]

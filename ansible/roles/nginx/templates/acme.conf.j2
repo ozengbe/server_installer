@@ -1,6 +1,6 @@
-# Managed by Ozenix. ACME HTTP-01 challenges (included by every site vhost).
+# Managed by ozenix. ACME HTTP-01 challenges (included by every site vhost).
 location ^~ /.well-known/acme-challenge/ {
-    root /var/lib/domainpilot-acme;
+    root /var/lib/ozenix-acme;
     default_type text/plain;
     try_files $uri =404;
 }

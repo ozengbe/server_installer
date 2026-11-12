@@ -31,7 +31,7 @@
         state: started
       when: ansible_facts['virtualization_type'] not in ['docker', 'container', 'containerd', 'lxc', 'podman']
 
-- name: Create Ozenix directories
+- name: Create ozenix directories
   ansible.builtin.file:
     path: "{{ item.path }}"
     state: directory
@@ -39,22 +39,22 @@
     group: root
     mode: "{{ item.mode }}"
   loop:
-    - { path: /etc/domainpilot, mode: "0750" }
-    - { path: /etc/domainpilot/firewall, mode: "0700" }
-    - { path: /var/lib/domainpilot, mode: "0700" }
-    - { path: /var/lib/domainpilot/firewall, mode: "0700" }
-    - { path: /var/log/domainpilot, mode: "0750" }
-    - { path: /usr/local/lib/domainpilot, mode: "0755" }
+    - { path: /etc/ozenix, mode: "0750" }
+    - { path: /etc/ozenix/firewall, mode: "0700" }
+    - { path: /var/lib/ozenix, mode: "0700" }
+    - { path: /var/lib/ozenix/firewall, mode: "0700" }
+    - { path: /var/log/ozenix, mode: "0750" }
+    - { path: /usr/local/lib/ozenix, mode: "0755" }
     - { path: /etc/systemd/journald.conf.d, mode: "0755" }
 
 - name: Persistent, size-capped journal
   ansible.builtin.copy:
-    dest: /etc/systemd/journald.conf.d/90-domainpilot.conf
+    dest: /etc/systemd/journald.conf.d/90-ozenix.conf
     owner: root
     group: root
     mode: "0644"
     content: |
-      # Managed by Ozenix
+      # Managed by ozenix
       [Journal]
       Storage=persistent
       Compress=yes
@@ -76,12 +76,12 @@
   block:
     - name: Keep debconf scripts out of noexec /tmp
       ansible.builtin.copy:
-        dest: /etc/apt/apt.conf.d/50domainpilot-tmp
+        dest: /etc/apt/apt.conf.d/50ozenix-tmp
         owner: root
         group: root
         mode: "0644"
         content: |
-          // Managed by Ozenix: debconf executes extracted config scripts; /tmp is noexec.
+          // Managed by ozenix: debconf executes extracted config scripts; /tmp is noexec.
           APT::ExtractTemplates::TempDir "/var/tmp";
     - name: Install tmp.mount unit
       ansible.builtin.copy:
@@ -103,8 +103,8 @@
 
 - name: Audit rules for privileged changes
   ansible.builtin.copy:
-    src: 90-domainpilot.rules
-    dest: /etc/audit/rules.d/90-domainpilot.rules
+    src: 90-ozenix.rules
+    dest: /etc/audit/rules.d/90-ozenix.rules
     owner: root
     group: root
     mode: "0640"

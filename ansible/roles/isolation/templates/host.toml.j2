@@ -1,7 +1,10 @@
-# Managed by Ozenix (installer). Facts about this host for the `site` CLI.
+# Managed by ozenix (installer). Facts about this host for the `site` CLI.
 [host]
 release = "{{ ansible_facts['distribution_version'] }}"
 default_php_version = "{{ dp_php_version }}"
-php_versions = ["{{ dp_php_version }}"]
+php_versions = {{ (dp_php_installed_versions | default([dp_php_version])) | to_json }}
 cache_engine = "{{ dp_cache_engine }}"
 nginx_user = "nginx"
+node_versions = {{ dp_node_versions | to_json }}
+default_node_version = "{{ dp_node_default }}"
+python_sites = {{ dp_python_sites | bool | lower }}

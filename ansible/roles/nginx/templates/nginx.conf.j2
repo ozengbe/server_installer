@@ -1,4 +1,4 @@
-# Managed by Ozenix (role nginx). Local changes will be overwritten.
+# Managed by ozenix (role nginx). Local changes will be overwritten.
 user nginx;
 worker_processes auto;
 worker_rlimit_nofile 65535;
@@ -7,12 +7,18 @@ error_log /var/log/nginx/error.log warn;
 
 events {
     # Sized by `site system optimize` (installer default on first install).
-    include /etc/nginx/domainpilot/tuning-events.conf;
+    include /etc/nginx/ozenix/tuning-events.conf;
     multi_accept on;
 }
 
 http {
     include /etc/nginx/mime.types;
+
+    # WebSocket upgrades for Node.js/Python app sites (app.body.tmpl).
+    map $http_upgrade $dp_connection_upgrade {
+        default upgrade;
+        ""      "";
+    }
     default_type application/octet-stream;
 
     # Information disclosure
@@ -65,15 +71,15 @@ http {
                application/xml image/svg+xml application/manifest+json font/ttf font/otf;
 
     # Real client IP behind Cloudflare (trusted from Cloudflare ranges only)
-    include /etc/nginx/domainpilot/snippets/cloudflare-realip.conf;
+    include /etc/nginx/ozenix/snippets/cloudflare-realip.conf;
 
     # File-cache sizing by `site system optimize`.
-    include /etc/nginx/domainpilot/tuning-http.conf;
+    include /etc/nginx/ozenix/tuning-http.conf;
 
     # TLS defaults for every server block
-    include /etc/nginx/domainpilot/snippets/tls.conf;
+    include /etc/nginx/ozenix/snippets/tls.conf;
 
-    # Default server first, then Ozenix-managed sites (Phase 5).
-    include /etc/nginx/domainpilot/default-server.conf;
-    include /etc/nginx/domainpilot/sites/*.conf;
+    # Default server first, then ozenix-managed sites (Phase 5).
+    include /etc/nginx/ozenix/default-server.conf;
+    include /etc/nginx/ozenix/sites/*.conf;
 }

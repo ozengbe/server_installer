@@ -26,8 +26,12 @@ annotate() { # escape for workflow commands, then emit
 report() {
   case "$mode" in
     install)
-      grep -E 'fatal:|\[ERROR\]|FAILED!|install.sh: ERROR' "$log" | cut -c1-600 | head -8 \
-        | while IFS= read -r line; do annotate "$line"; done ;;
+      # Loop tasks fail with "failed: [host] (item=...)" and no "fatal:" line.
+      grep -E 'fatal:|^failed: |\[ERROR\]|ERROR!|FAILED!|install.sh: ERROR|release: ' "$log" \
+        | cut -c1-600 | head -8 | while IFS= read -r line; do annotate "$line"; done
+      # Which task failed (GitHub shows only the first line of an annotation).
+      awk '/^TASK \[/ {task=$0} /^(fatal|failed): / {print task}' "$log" | sort -u | head -3 \
+        | while IFS= read -r line; do annotate "failed task: $line"; done ;;
     idempotent)
       awk '/^TASK \[/ {task=$0} /^changed: / {print task}' "$log" | sort -u | head -15 \
         | while IFS= read -r line; do annotate "changed on second run: $line"; done
@@ -50,8 +54,10 @@ if [[ $mode == idempotent && $rc -eq 0 ]]; then
 fi
 if [[ $rc -ne 0 ]]; then
   report
-  # Always leave at least one specific annotation.
-  annotate "step failed (exit $rc); last lines:"$'\n'"$(tail -n 8 "$log")"
+  # Always leave specific annotations: one per line, because GitHub's summary
+  # shows only the first line of a multi-line annotation.
+  annotate "step failed (exit $rc); the last lines follow"
+  tail -n 8 "$log" | cut -c1-400 | while IFS= read -r line; do annotate "  $line"; done
 fi
 rm -f "$log"
 exit "$rc"

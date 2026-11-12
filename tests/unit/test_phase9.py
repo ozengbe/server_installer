@@ -13,18 +13,18 @@ from typing import Any
 
 import pytest
 
-from domainpilot.cli import security_handlers
-from domainpilot.core import proc
-from domainpilot.core.errors import OperationFailed, PreconditionFailed
-from domainpilot.core.paths import Paths
-from domainpilot.health import Report
-from domainpilot.isolation import db, fcgi
-from domainpilot.security import host_audit as ha
-from domainpilot.security.isolation_test import IsolationTester, evaluate
-from domainpilot.security.report import DISCLAIMER, Finding, SecurityReport
-from domainpilot.security.site_audit import UNIT_EXPECT, SiteAuditor, SiteFacts
-from domainpilot.sites.lifecycle import CreateRequest
-from domainpilot.tls.acme import Certbot
+from ozenix.cli import security_handlers
+from ozenix.core import proc
+from ozenix.core.errors import OperationFailed, PreconditionFailed
+from ozenix.core.paths import Paths
+from ozenix.health import Report
+from ozenix.isolation import db, fcgi
+from ozenix.security import host_audit as ha
+from ozenix.security.isolation_test import IsolationTester, evaluate
+from ozenix.security.report import DISCLAIMER, Finding, SecurityReport
+from ozenix.security.site_audit import UNIT_EXPECT, SiteAuditor, SiteFacts
+from ozenix.sites.lifecycle import CreateRequest
+from ozenix.tls.acme import Certbot
 
 # --- report ------------------------------------------------------------------------------
 
@@ -64,7 +64,7 @@ GOOD_PROBE: dict[str, Any] = {
     "no_new_privs": True,
     "seccomp_filter": True,
     "cap_eff_zero": True,
-    "apparmor_label": "domainpilot-tenant-t0001//&unconfined (enforce)",
+    "apparmor_label": "ozenix-tenant-t0001//&unconfined (enforce)",
     "own_read_code": True,
     "own_write_code": False,
     "own_write_data": True,
@@ -126,7 +126,7 @@ def test_evaluate_escapes_are_critical() -> None:
     weaker = evaluate(GOOD_PROBE, tenant="t0001", uid=20001, writable_code=True)
     assert [f.severity for f in weaker.problems()] == ["warn"]
     # A foreign profile stacked with ours does not count as ours.
-    stacked = dict(GOOD_PROBE, apparmor_label="domainpilot-tenant-t0001//&other (enforce)")
+    stacked = dict(GOOD_PROBE, apparmor_label="ozenix-tenant-t0001//&other (enforce)")
     assert "SBX-APPARMOR" in {
         f.id for f in evaluate(stacked, tenant="t0001", uid=20001, writable_code=False).problems()
     }
@@ -235,12 +235,12 @@ udp UNCONN 0 0 127.0.0.53%lo:53 0.0.0.0:*
 def fake_host(tmp_path: Path, overrides: dict[str, str | None] | None = None) -> ha.HostView:
     outputs: dict[str, str | None] = {
         "sshd -T": SSHD_T,
-        "nft list chain inet domainpilot input": "chain input { policy drop; }",
-        "nft list chain inet domainpilot tenant_egress": "tenant_egress { drop }",
+        "nft list chain inet ozenix input": "chain input { policy drop; }",
+        "nft list chain inet ozenix tenant_egress": "tenant_egress { drop }",
         "ss -H -l -n -t -u": SS_OUT,
         "mariadb --batch --skip-column-names -e SELECT @@skip": "1\t0\n",
         "mariadb --batch --skip-column-names -e SELECT CONCAT": "",
-        "lsattr -d": "-----a--------e------- /var/log/domainpilot/audit.jsonl",
+        "lsattr -d": "-----a--------e------- /var/log/ozenix/audit.jsonl",
         "systemctl is-active": "active\n",
         "fail2ban-client status sshd": "Status for the jail: sshd\n",
         "nginx -T": NGINX_T,
@@ -258,30 +258,30 @@ def fake_host(tmp_path: Path, overrides: dict[str, str | None] | None = None) ->
 
     root = tmp_path / "host"
     for d, mode in (
-        ("etc/domainpilot", 0o750),
-        ("etc/domainpilot/secrets/backup", 0o700),
-        ("var/lib/domainpilot", 0o700),
-        ("var/log/domainpilot", 0o750),
+        ("etc/ozenix", 0o750),
+        ("etc/ozenix/secrets/backup", 0o700),
+        ("var/lib/ozenix", 0o700),
+        ("var/log/ozenix", 0o750),
         ("etc/sysctl.d", 0o755),
         ("proc/sys/kernel", 0o755),
         ("sys/module/apparmor/parameters", 0o755),
     ):
         (root / d).mkdir(parents=True, exist_ok=True)
         (root / d).chmod(mode)
-    (root / "etc/domainpilot/secrets").chmod(0o700)
-    cred = root / "etc/domainpilot/secrets/backup/master.cred"
+    (root / "etc/ozenix/secrets").chmod(0o700)
+    cred = root / "etc/ozenix/secrets/backup/master.cred"
     cred.write_text("x")
     cred.chmod(0o600)
-    (root / "var/log/domainpilot/audit.jsonl").write_text("")
-    (root / "etc/sysctl.d/99-domainpilot.conf").write_text(
+    (root / "var/log/ozenix/audit.jsonl").write_text("")
+    (root / "etc/sysctl.d/99-zz-ozenix.conf").write_text(
         "# hardening\nkernel.kptr_restrict = 2\nkernel.dmesg_restrict=1\nnet.ipv4.tcp_x = 1 2\n"
         "bad key = 1\n"
     )
     (root / "proc/sys/kernel/kptr_restrict").write_text("2\n")
     (root / "proc/sys/kernel/dmesg_restrict").write_text("1\n")
     (root / "sys/module/apparmor/parameters/enabled").write_text("Y\n")
-    (root / "etc/domainpilot/backup.json").write_text('{"repository": "s3:https://s3.x/b"}')
-    (root / "etc/domainpilot/alerts.json").write_text("{}")
+    (root / "etc/ozenix/backup.json").write_text('{"repository": "s3:https://s3.x/b"}')
+    (root / "etc/ozenix/alerts.json").write_text("{}")
     return ha.HostView(run=run, root=root)
 
 
@@ -325,8 +325,8 @@ def test_host_audit_finds_drift(tmp_path: Path) -> None:
         tmp_path,
         {
             "sshd -T": weak_sshd,
-            "nft list chain inet domainpilot input": "chain input { policy accept; }",
-            "nft list chain inet domainpilot tenant_egress": None,
+            "nft list chain inet ozenix input": "chain input { policy accept; }",
+            "nft list chain inet ozenix tenant_egress": None,
             "ss -H -l -n -t -u": SS_OUT + "tcp LISTEN 0 80 0.0.0.0:3306 0.0.0.0:*\n",
             "mariadb --batch --skip-column-names -e SELECT @@skip": "0\t1\n@%\nbob@10.0.0.5\n",
             "mariadb --batch --skip-column-names -e SELECT CONCAT": "t0001@localhost\n",
@@ -339,16 +339,16 @@ def test_host_audit_finds_drift(tmp_path: Path) -> None:
         },
     )
     (view.root / "proc/sys/kernel/kptr_restrict").write_text("0\n")
-    (view.root / "var/lib/domainpilot/firewall").mkdir()
-    (view.root / "var/lib/domainpilot/firewall/pending").write_text("")
-    (view.root / "etc/domainpilot/backup.json").write_text('{"repository": "/var/backups"}')
-    (view.root / "etc/domainpilot/alerts.json").unlink()
-    (view.root / "etc/domainpilot").chmod(0o757)
+    (view.root / "var/lib/ozenix/firewall").mkdir()
+    (view.root / "var/lib/ozenix/firewall/pending").write_text("")
+    (view.root / "etc/ozenix/backup.json").write_text('{"repository": "/var/backups"}')
+    (view.root / "etc/ozenix/alerts.json").unlink()
+    (view.root / "etc/ozenix").chmod(0o757)
     (view.root / "sys/module/apparmor/parameters/enabled").write_text("N\n")
     rep = ha.audit_host(view)
     failed = {f.id for f in rep.problems()}
     expected = {
-        "SSH-PASSWORDAUTHENTICATION", "SSH-MAXAUTHTRIES", "FW-DEFAULT-DENY", "FW-TENANT-EGRESS",
+        "SSH-PASSWORDAUTHENTICATION", "FW-DEFAULT-DENY", "FW-TENANT-EGRESS",
         "FW-PENDING", "NET-LISTENERS", "KERN-SYSCTL", "DB-NO-TCP", "DB-LOCAL-INFILE",
         "DB-ACCOUNTS", "DB-TENANT-GLOBAL", "PERM-ETC", "AUDIT-APPEND-ONLY", "AA-ENABLED",
         "F2B-SSHD", "UPD-TIMER", "NGX-TOKENS", "NGX-REALIP", "NGX-TLS-PROTOCOLS",
@@ -367,12 +367,12 @@ def test_host_audit_when_tools_fail(tmp_path: Path) -> None:
             "nginx -T": None,
             "ss -H": None,
             "mariadb --batch --skip-column-names -e SELECT @@skip": None,
-            "nft list chain inet domainpilot input": None,
+            "nft list chain inet ozenix input": None,
         },
     )
-    (view.root / "etc/sysctl.d/99-domainpilot.conf").unlink()
-    (view.root / "etc/domainpilot/backup.json").unlink()
-    (view.root / "var/log/domainpilot/audit.jsonl").unlink()
+    (view.root / "etc/sysctl.d/99-zz-ozenix.conf").unlink()
+    (view.root / "etc/ozenix/backup.json").unlink()
+    (view.root / "var/log/ozenix/audit.jsonl").unlink()
     rep = ha.audit_host(view)
     failed = {f.id for f in rep.problems()}
     assert {
@@ -615,9 +615,9 @@ def test_site_audit_edge_cases(site_tree: dict[str, Any]) -> None:
 def _ctx(system: dict[str, Any], domain: str | None = None) -> Any:
     from conftest import FakeProbe
 
-    from domainpilot.cli.context import Context
-    from domainpilot.core.config import Config
-    from domainpilot.core.output import Output
+    from ozenix.cli.context import Context
+    from ozenix.core.config import Config
+    from ozenix.core.output import Output
 
     ctx = Context(
         paths=system["paths"],
@@ -711,13 +711,13 @@ def test_worker_identity_read_from_host_side(tmp_path: Path) -> None:
         (d.parent / "status").write_text(
             f"Name:\tphp-fpm8.5\nNoNewPrivs:\t{nnp}\nSeccomp:\t2\nCapEff:\t0000000000000000\n"
         )
-        (d / "current").write_text("domainpilot-tenant-t0001//&unconfined (enforce)\x00\n")
+        (d / "current").write_text("ozenix-tenant-t0001//&unconfined (enforce)\x00\n")
     tester = IsolationTester(
         Paths.under(tmp_path), cgroup_root=tmp_path / "cg", proc_root=tmp_path / "proc"
     )
     ident = tester.worker_identity("t0001")
     assert ident["no_new_privs"] and ident["seccomp_filter"] and ident["cap_eff_zero"]
-    assert ident["apparmor_label"] == "domainpilot-tenant-t0001//&unconfined (enforce)"
+    assert ident["apparmor_label"] == "ozenix-tenant-t0001//&unconfined (enforce)"
     merged = dict(GOOD_PROBE, no_new_privs=False, apparmor_label="") | ident
     assert evaluate(merged, tenant="t0001", uid=20001, writable_code=False).worst == "info"
     (tmp_path / "proc" / "102" / "status").write_text("NoNewPrivs:\t0\nSeccomp:\t0\nCapEff:\t1\n")

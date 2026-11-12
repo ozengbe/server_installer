@@ -1,6 +1,6 @@
-# Managed by Ozenix (role backup).
+# Managed by ozenix (role backup).
 [Unit]
-Description=Ozenix weekly restore drill
+Description=ozenix weekly restore drill
 
 [Timer]
 OnCalendar=Sun *-*-* 05:00

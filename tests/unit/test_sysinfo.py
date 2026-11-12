@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from domainpilot.core import proc, sysinfo
-from domainpilot.core.errors import OperationFailed
+from ozenix.core import proc, sysinfo
+from ozenix.core.errors import OperationFailed
 
 
 @pytest.fixture

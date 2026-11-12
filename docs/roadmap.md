@@ -1,4 +1,4 @@
-# Ozenix — Development Roadmap
+# ozenix — Development Roadmap
 
 Each milestone is a small, reviewable change with explicit acceptance criteria. Nothing moves to the next milestone until the current one is reviewed. "VM" means a disposable Ubuntu 24.04 VM. Destructive or security tests never run against production.
 

@@ -1,0 +1,41 @@
+    root ${docroot};
+    index index.php;
+
+    # Files are served only if every symlink below the (root-owned) site root has
+    # the same owner as its target: a site cannot point public/ or storage/ at another
+    # site's files.
+    disable_symlinks if_not_owner from=${tenant_root};
+    limit_req zone=dp_req burst=40 nodelay;
+
+    include /etc/nginx/ozenix/snippets/security-headers.conf;
+${hsts}
+    include /etc/nginx/ozenix/snippets/deny-sensitive.conf;
+    # Laravel's own files never come from the web, even if copied into public/.
+    location ~* /(?:artisan|server\.php|storage/logs/.*)$$ { return 404; }
+
+    # Public uploads (`php artisan storage:link` equivalent): served from the
+    # writable data/ area, and PHP is never executed there.
+    location ^~ /storage/ {
+        alias ${tenant_root}/data/storage/app/public/;
+        # ^~ skips the server-level deny rules, so repeat them here.
+        location ~ /\. { return 404; }
+        location ~* \.(?:php|phtml|phar|env|ini|log|sql|sqlite|bak|sh)$$ { return 404; }
+        try_files $$uri =404;
+    }
+
+    location / {
+        try_files $$uri $$uri/ /index.php?$$query_string;
+    }
+
+    # Only the front controller runs PHP (no other .php file in public/ is executed).
+    location = /index.php {
+        fastcgi_split_path_info ^(.+\.php)(/.+)$$;
+        include /etc/nginx/fastcgi_params;
+        fastcgi_param SCRIPT_FILENAME $$document_root$$fastcgi_script_name;
+        fastcgi_param HTTPS $$https if_not_empty;
+        fastcgi_param HTTP_PROXY "";
+        fastcgi_pass unix:${php_socket};
+        fastcgi_read_timeout 120s;
+        fastcgi_intercept_errors on;
+    }
+    location ~ \.php$$ { return 404; }

@@ -1,4 +1,4 @@
-# Ozenix — Security Validation Report (Phase 9)
+# ozenix — Security Validation Report (Phase 9)
 
 Status: **preview**. Release gate #6 (a review of the root-run code paths by someone other than the author) is still open. Until it closes, this report is the author's own validation, not an independent assessment.
 
@@ -8,17 +8,18 @@ Status: **preview**. Release gate #6 (a review of the root-run code paths by som
 
 | Layer | How | Where |
 |---|---|---|
-| Host configuration | `site system audit`: about 40 read-only checks against the **running** state (sshd -T, nft, sysctl, MariaDB variables and accounts, file modes, nginx -T, timers), so drift after install is caught | `domainpilot/security/host_audit.py` |
-| Site confinement (configured) | `site <d> isolation audit`: systemd sandbox properties as systemd applies them, exposure score ≤ 2.0, AppArmor mode, cgroup limits, directory owners and modes, database grants, account hygiene | `domainpilot/security/site_audit.py` |
-| Site confinement (proven) | `site <d> isolation test`: escape attempts from **inside** the live site's PHP sandbox (other sites' files, sockets, processes and databases, host secrets, metadata, loopback, private networks, exec) | `domainpilot/security/isolation_test.py`, `isolation/probe.php` |
+| Host configuration | `site system audit`: about 40 read-only checks against the **running** state (sshd -T, nft, sysctl, MariaDB variables and accounts, file modes, nginx -T, timers), so drift after install is caught | `ozenix/security/host_audit.py` |
+| Site confinement (configured) | `site <d> isolation audit`: systemd sandbox properties as systemd applies them, exposure score ≤ 2.0, AppArmor mode, cgroup limits, directory owners and modes, database grants, account hygiene | `ozenix/security/site_audit.py` |
+| Site confinement (proven) | `site <d> isolation test`: escape attempts from **inside** the live site's PHP sandbox (other sites' files, sockets, processes and databases, host secrets, metadata, loopback, private networks, exec) | `ozenix/security/isolation_test.py`, `isolation/probe.php` |
 | Site hygiene | `site <d> security`: the above, plus world-writable files, setuid, secrets in the web root, symlinks leaving the site, PHP settings, certificate, SFTP keys, backups | same |
-| Ozenix itself | Negative tests: injection and traversal through the real binary, symlinks planted by tenants against root's backup, restore and purge, setuid uploads, privilege checks | `tests/integration/test_phase9_security.py`, `tests/security/` |
+| ozenix itself | Negative tests: injection and traversal through the real binary, symlinks planted by tenants against root's backup, restore and purge, setuid uploads, privilege checks | `tests/integration/test_phase9_security.py`, `tests/security/` |
 | Recovery | Firewall auto-rollback, crash-and-repair at every creation step, restore drill, crash → bounded restart → alert | phases 2a, 5 and 8 integration suites |
 | Release integrity (Phase 10) | Reproducible tarball, SSH-signed `SHA256SUMS`, per-file `MANIFEST.sha256` re-checked by the installer on every run (tampered tree refused), downgrade refusal, root-only pre-upgrade snapshot, versioned code directories switched atomically | `tools/release.sh`, `installer/install.sh`, `tests/unit/test_phase10.py`, `tests/integration/test_phase10_release.py` |
 | Key rotation (Phase 10) | Backup master key rotated in two idempotent steps against real restic; old key removed only after the new one opens every repository | same |
 | Operator docs (Phase 10) | Every `site …` command in the install guide, admin guide and runbooks is parsed against the real CLI grammar | `tests/unit/test_docs_commands.py` |
+| Web application scan (DAST) | OWASP ZAP full scan (spider + active attacks: SQL injection, XSS, path traversal, file inclusion, command injection, source and secret disclosure) against a PHP, Laravel, Node.js, Python and static site on the real 26.04 host, over HTTPS: **0 failures** on all five, 137-140 checks passed each. Remaining warnings are by design (no HSTS or redirect while a site has only its self-signed placeholder; Laravel's JavaScript-readable XSRF-TOKEN cookie) or app-specific (full CSP with `default-src`, Cross-Origin-Resource-Policy, cache headers). ozenix sends a baseline CSP (`frame-ancestors`, `object-src`, `base-uri`) on every site. | `docker run zaproxy/zap-stable zap-full-scan.py -t https://<site>` |
 
-All suites run on a disposable Ubuntu 26.04 host (`/etc/domainpilot-test-vm`). CI runs 24.04.
+All suites run on a disposable Ubuntu 26.04 host (`/etc/ozenix-test-vm`). CI runs 24.04.
 
 ## 2. Issues found and fixed during validation
 
@@ -54,7 +55,7 @@ Every threat in [threat-model.md](threat-model.md) §4 has at least one automate
 | TH12 | `tests/unit/test_firewall_template.py::test_origin_lock_allows_web_ports_from_cloudflare_only` | partial (origin lock is opt-in; per-zone AOP not built) |
 | TH13 | `tests/integration/test_phase6b_cloudflare.py::test_real_ip_trusts_cloudflare_only` | full |
 | TH14 | `tests/integration/test_phase2a_baseline.py::test_sshd_effective_setting`, `tests/integration/test_phase2a_baseline.py::test_sshd_has_no_weak_algorithms`, `tests/integration/test_phase2b_services.py::test_fail2ban_jail_running` | full |
-| TH15 | `tests/integration/test_phase8_ops.py::test_sftp_chroot_upload_and_escapes` | full |
+| TH15 | `tests/integration/test_phase8_ops.py::test_site_user_ssh_sftp_and_escapes`, `tests/unit/test_site_users.py::test_create_with_named_user_and_key` | partial (site users have a shell: unsandboxed processes, see RR-13) |
 | TH16 | `tests/unit/test_cloudflare.py::test_credential_store_roundtrip`, `tests/unit/test_cloudflare.py::test_certbot_dns01_argv` | full |
 | TH17 | `tests/integration/test_phase2b_services.py::test_nginx_from_signed_nginx_org_repo`, `tests/integration/test_phase2b_services.py::test_unattended_upgrades_policy`, `tests/security/test_forbidden_calls.py::test_package_has_no_forbidden_constructs` | partial (universe packages need Ubuntu Pro for security updates) |
 | TH18 | `tests/integration/test_phase8_ops.py::test_backup_and_restore_roundtrip`, `tests/integration/test_phase8_ops.py::test_verify_and_scheduled_restore_drill` | partial (immutability needs the Object Lock bucket) |
@@ -77,6 +78,11 @@ Risks RR-1 to RR-6 from the threat model still stand. Phase 9 adds the open gaps
 | RR-10 | **Origin lock and AOP.** The firewall can restrict 80/443 to Cloudflare (`dp_cloudflare_origin_lock`), but it is off by default because not every site is proxied. Per-zone Authenticated Origin Pulls are not built. | Turn on the lock when all sites are proxied. AOP stays on the roadmap. |
 | RR-11 | **L7 DoS.** Rate and connection limits are configured but not load-tested. A determined flood needs Cloudflare in front. | Accepted for v1. |
 | RR-12 | **universe packages** (restic, Valkey/Redis, fail2ban, certbot) get security fixes only with Ubuntu Pro. | Decision D6: use Ubuntu Pro on production hosts. |
+| RR-13 | **Site users have an SSH shell (CloudPanel model, chosen 2026-11).** Their sessions are not inside the PHP sandbox, but: the per-site egress firewall applies to them (uid 30000-39999; outbound 80, 443 and 22 only, no loopback/metadata/private networks), their sessions get the site's CPU/memory/process limits (user-<uid>.slice), they cannot use cron or at, and revoking the last key ends their sessions. Other sites' files, host secrets and SSH tunnels stay closed (tested). | Accepted. |
+| RR-14 | **The server's own SSH login is left as configured by the owner** (root login, passwords). | `site system audit` warns (SSH-PERMITROOTLOGIN, SSH-PASSWORDAUTHENTICATION); keys-only is recommended. |
+| RR-15 | **Node.js/Python apps and Laravel jobs may start programs, and run with W^X off** (JITs need writable code memory). | Confined by the site's "-exec" AppArmor profile (same files as PHP; only php, sh, Python, Node.js and the site's own code may run), plus the systemd sandbox, firewall and cgroup. |
+| RR-16 | **Laravel caches in data/ are executable code** (config, routes, compiled views). A hacked PHP process could write PHP there that the scheduler or queue later runs. | Contained: those run under the site's "-exec" AppArmor profile (same files as PHP, only php/sh/node/python and the site's code may run), in the site's firewall and cgroup. |
+| RR-17 | **Host /proc is not hidepid:** site users can see other sites' process names in `ps` (not their files or memory). | Planned: /proc hidepid=invisible with an exception group for monitoring. |
 
 ## 5. How to re-run
 

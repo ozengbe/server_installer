@@ -1,4 +1,4 @@
-# Installing Ozenix
+# Installing ozenix
 
 > **Preview release.** Read [security-report.md](security-report.md) §4 for the known limits. Install on a server that hosts nothing else.
 
@@ -13,19 +13,19 @@ This guide takes you from a fresh server to the first site in about 30 minutes. 
 
 ## Download and verify
 
-Download three files from the release page: `domainpilot-<version>.tar.gz`, `SHA256SUMS` and `SHA256SUMS.sig`. Then download the signing key list, `allowed_signers`. Take it from a source you trust **other than** the release page, and compare its fingerprint with the one published in [release.md](release.md#one-time-setup-the-signing-key).
+Download three files from the release page: `ozenix-<version>.tar.gz`, `SHA256SUMS` and `SHA256SUMS.sig`. Then download the signing key list, `allowed_signers`. Take it from a source you trust **other than** the release page, and compare its fingerprint with the one published in [release.md](release.md#one-time-setup-the-signing-key).
 
 Then, on the server:
 
 ```bash
-# 1. The signature must say: Good "domainpilot-release" signature for release@domainpilot
-ssh-keygen -Y verify -f allowed_signers -I release@domainpilot -n domainpilot-release \
+# 1. The signature must say: Good "ozenix-release" signature for release@ozenix
+ssh-keygen -Y verify -f allowed_signers -I release@ozenix -n ozenix-release \
   -s SHA256SUMS.sig < SHA256SUMS
 # 2. The checksum must say: OK
 sha256sum -c SHA256SUMS
 # 3. Unpack (the installer re-checks every file against MANIFEST.sha256)
-tar -xzf domainpilot-<version>.tar.gz
-cd domainpilot-<version>
+tar -xzf ozenix-<version>.tar.gz
+cd ozenix-<version>
 ```
 
 **Stop if either check fails.** Don't run anything from that download.
@@ -37,14 +37,14 @@ sudo installer/install.sh --check     # dry run: shows what would change
 sudo installer/install.sh
 ```
 
-The first run creates `/etc/domainpilot/install.yml`. Your account becomes the first admin, using the keys from your `~/.ssh/authorized_keys`. Review that file. Every setting is documented in [ansible/group_vars/all.yml](../ansible/group_vars/all.yml). Re-run the installer after any change.
+The first run creates `/etc/ozenix/install.yml`. Review it; every setting is documented in [ansible/group_vars/all.yml](../ansible/group_vars/all.yml). Re-run the installer after any change.
 
 When it finishes, the installer prints the installed version. You can show it again with `sudo site version`.
 
-After hardening:
-- SSH is key-only. Root login is disabled, and only members of `dp-admins` (admins) and `dp-sftp` (site owners) can log in.
-- Keys are read **only** from `/etc/ssh/authorized_keys.d/<user>`, which is root-owned. Keys in `~/.ssh/authorized_keys` are ignored.
-- Every inbound port is closed except 22, 80 and 443 (plus WireGuard if configured), on IPv4 and IPv6.
+**What changes, and what doesn't:**
+- **Your own login is not touched.** root, your accounts, passwords and keys stay as you configured them, as with CloudPanel. `sudo site system audit` gives warnings if root can log in with a password.
+- **Every site gets its own Linux user**, which you name when you create the site. That user logs in with an SSH key only, and gets SFTP and a shell in its own site.
+- **Firewall:** every inbound port is closed except 22, 80 and 443 (plus WireGuard if configured), on IPv4 and IPv6.
 
 ## First checks and first site
 
@@ -57,12 +57,13 @@ sudo site system health
 sudo site system security            # exit 0 = all clear, 10 = warnings, 11 = critical
 ```
 
-**2. Point DNS at the server.** At your DNS provider, create `A` (IPv4) and, if the server has IPv6, `AAAA` records for `example.com` and `www.example.com` with the server's address. With Cloudflare, the proxy (orange cloud) can be on or off. Ozenix does not create or change DNS records.
+**2. Point DNS at the server.** At your DNS provider, create `A` (IPv4) and, if the server has IPv6, `AAAA` records for `example.com` and `www.example.com` with the server's address. With Cloudflare, the proxy (orange cloud) can be on or off. ozenix does not create or change DNS records.
 
-**3. Create the site:**
+**3. Create the site with its own user.** Have the person who will manage the site send you their SSH **public** key (for example `john.pub`; Ed25519 is recommended):
 
 ```bash
-sudo site example.com create --alias www.example.com      # PHP site; --type static or --type proxy also exist
+sudo site example.com create --user john --key john.pub --alias www.example.com
+# PHP site; --type static or --type proxy also exist
 ```
 
 **4. HTTPS.** There's nothing to do:
@@ -78,17 +79,19 @@ sudo site example.com ssl              # request Let's Encrypt now
 sudo site example.com ssl status       # which certificate, expiry, what is missing
 ```
 
-**5. Upload the website over SFTP.**
-1. Ask the site owner for their SSH **public** key (for example `alice.pub`; Ed25519 is recommended).
-2. Add it:
-   ```bash
-   sudo site example.com sftp create --key alice.pub --name alice
-   ```
-3. The command prints the login (`t0001-deploy@<server>`). Connect with any SFTP client (FileZilla, WinSCP, `sftp`), using the private key. Files go in **`app/public`**, which is the web root.
-4. To remove the access later:
-   ```bash
-   sudo site example.com sftp revoke alice --confirm example.com
-   ```
+**5. Upload the website.** `john` logs in with his private key:
+- **SFTP:** FileZilla, WinSCP or `sftp john@<server>`. Website files go in **`app/public`**, which is the web root.
+- **SSH:** `ssh john@<server>` gives a shell in the site, for git, composer or wp-cli.
+
+He can't see other sites or the server's secrets.
+
+To give another person or computer access, add their key under its own label. Revoke a key the same way:
+
+```bash
+sudo site example.com sftp create --key laptop.pub --name laptop
+sudo site example.com sftp list
+sudo site example.com sftp revoke laptop --confirm example.com
+```
 
 **6. Database** (PHP apps such as WordPress):
 
@@ -122,15 +125,15 @@ For remote Ansible runs, set `dp_firewall_confirm_mode: remote`. Ansible then re
 ## Common changes
 | Task | How |
 |---|---|
-| Add an admin | Add to `dp_admins` in `/etc/domainpilot/install.yml`, re-run the installer |
+| Optional: extra admins managed by ozenix | Add to `dp_admins` in `/etc/ozenix/install.yml` (name + SSH keys), re-run the installer |
 | Revoke an admin | Move the name from `dp_admins` to `dp_admins_revoked`, re-run (key file removed, group membership dropped; account kept) |
 | Restrict SSH to office/VPN IPs | Set `dp_ssh_allow_v4` / `dp_ssh_allow_v6`, re-run, confirm from a new session **from an allowed address** |
 | Require a sudo password | `dp_admin_sudo_nopasswd: false`. Set a password for each admin **first**. |
 
 ## Rollback / recovery
-- **Firewall:** `sudo dp-firewall rollback` while a change is pending. Otherwise re-run the installer with corrected vars. As a last resort from the provider console: `sudo nft delete table inet domainpilot` (opens the host).
-- **SSH:** the installer validates with `sshd -t` and restores the previous drop-in if validation fails. To revert by hand from the console, delete `/etc/ssh/sshd_config.d/00-domainpilot.conf` and the `Ozenix managed block` in `/etc/ssh/sshd_config`, then run `systemctl reload ssh`.
-- **sysctl:** delete `/etc/sysctl.d/99-zz-domainpilot.conf` and reboot. Some settings, such as `kexec_load_disabled`, can't be undone without a reboot.
+- **Firewall:** `sudo dp-firewall rollback` while a change is pending. Otherwise re-run the installer with corrected vars. As a last resort from the provider console: `sudo nft delete table inet ozenix` (opens the host).
+- **SSH:** the installer validates with `sshd -t` and restores the previous drop-in if validation fails. To revert by hand from the console, delete `/etc/ssh/sshd_config.d/00-ozenix.conf` and the `ozenix managed block` in `/etc/ssh/sshd_config`, then run `systemctl reload ssh`.
+- **sysctl:** delete `/etc/sysctl.d/99-zz-ozenix.conf` and reboot. Some settings, such as `kexec_load_disabled`, can't be undone without a reboot.
 - **/tmp hardening:** `systemctl disable tmp.mount`, then reboot.
 
 ## Services installed
@@ -149,11 +152,11 @@ Health check: `sudo dp-healthcheck` (or `--json`). It runs automatically after e
 
 **Updates that are deliberately not automatic:** nginx.org releases, PHP minor/major versions, MariaDB major versions, and kernel reboots. Run them in a maintenance window with `sudo site system update`. MariaDB is never restarted by needrestart.
 
-**Rollback:** every service config change is validated (`nginx -t`, `fail2ban-client --test`, MariaDB start) and the previous file is restored if validation fails. To remove a service's Ozenix config by hand, delete the file named in its "Managed by Ozenix" header and restart the service.
+**Rollback:** every service config change is validated (`nginx -t`, `fail2ban-client --test`, MariaDB start) and the previous file is restored if validation fails. To remove a service's ozenix config by hand, delete the file named in its "Managed by ozenix" header and restart the service.
 
 ## Locked out by fail2ban
 
-Repeated failed SSH logins get the source IP banned for 1 h (longer for repeat offenders), on SSH only. Websites stay reachable. The installer exempts the IP it was run from (`dp_fail2ban_ignoreip` in `/etc/domainpilot/install.yml`); add any other admin addresses there and re-run the installer.
+Repeated failed SSH logins get the source IP banned for 1 h (longer for repeat offenders), on SSH only. Websites stay reachable. The installer exempts the IP it was run from (`dp_fail2ban_ignoreip` in `/etc/ozenix/install.yml`); add any other admin addresses there and re-run the installer.
 
 If you are banned, connect from another address or the provider console and run:
 
@@ -217,8 +220,8 @@ Options: `--min-severity warn|critical` and `--reminder-hours N` (how often a st
 
 ```bash
 sudo site example.com sftp create --key alice.pub --name alice
-# alice connects with: sftp t0001-deploy@<server>   (lands in /app; web root is /app/public)
+# adds another key to the site user (see the create output); web root is ~/app/public
 sudo site example.com sftp revoke alice --confirm example.com
 ```
 
-Key-only (Ed25519 recommended; RSA must be at least 3072 bits). The account is chrooted to its own site, has no shell and no port forwarding, and uploads are readable by the web server and PHP but nobody else.
+Keys only (Ed25519 recommended; RSA must be at least 3072 bits). The site user gets SFTP and a shell in its own site, no port forwarding, and cannot read other sites or the server's secrets.

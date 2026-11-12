@@ -1,0 +1,10 @@
+# Managed by ozenix. Runs a Laravel site's scheduler every minute.
+[Unit]
+Description=ozenix Laravel scheduler for tenant %i (every minute)
+
+[Timer]
+OnCalendar=*-*-* *:*:00
+AccuracySec=1s
+
+[Install]
+WantedBy=timers.target

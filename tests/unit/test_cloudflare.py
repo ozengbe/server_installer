@@ -9,20 +9,20 @@ from typing import Any
 
 import pytest
 
-from domainpilot.cli import cf_handlers
-from domainpilot.cloudflare import api as cf_api
-from domainpilot.cloudflare.api import Client, CloudflareError
-from domainpilot.cloudflare.creds import CredentialStore, validate_label
-from domainpilot.cloudflare.manager import CloudflareManager, tag
-from domainpilot.core import proc
-from domainpilot.core.errors import (
+from ozenix.cli import cf_handlers
+from ozenix.cloudflare import api as cf_api
+from ozenix.cloudflare.api import Client, CloudflareError
+from ozenix.cloudflare.creds import CredentialStore, validate_label
+from ozenix.cloudflare.manager import CloudflareManager, tag
+from ozenix.core import proc
+from ozenix.core.errors import (
     ExitCode,
     OperationFailed,
     PreconditionFailed,
     UsageError,
     ValidationError,
 )
-from domainpilot.tls.acme import Certbot
+from ozenix.tls.acme import Certbot
 
 HOST = {"80.241.220.98", "2a02:c207:2367:8894::1"}
 
@@ -403,7 +403,7 @@ def cf_system(system: dict[str, Any], tmp_path: Path) -> dict[str, Any]:
     cfm.store.discard_ini = discard_ini  # type: ignore[method-assign]
 
     def make(dry_run: bool = False) -> Any:
-        from domainpilot.core.config import Config
+        from ozenix.core.config import Config
 
         m = system["manager"](dry_run)
         m.config = Config(autossl=True, ssl_staging=True)
@@ -418,7 +418,7 @@ def cf_system(system: dict[str, Any], tmp_path: Path) -> dict[str, Any]:
 
 
 def test_create_on_cloudflare_zone(cf_system: dict[str, Any]) -> None:
-    from domainpilot.sites.lifecycle import CreateRequest
+    from ozenix.sites.lifecycle import CreateRequest
 
     result = cf_system["cf_manager"]().create(
         CreateRequest("dp.example.com", aliases=["www.dp.example.com"], cloudflare=True)
@@ -431,8 +431,7 @@ def test_create_on_cloudflare_zone(cf_system: dict[str, Any]) -> None:
     names = sorted({r["name"] for r in cf_system["cf"].records.values()})
     assert names == ["dp.example.com", "www.dp.example.com"]
     assert all(
-        r["proxied"] and r["comment"] == "domainpilot:t0001"
-        for r in cf_system["cf"].records.values()
+        r["proxied"] and r["comment"] == "ozenix:t0001" for r in cf_system["cf"].records.values()
     )
     status = cf_system["cf_manager"]().ssl_status("dp.example.com")
     assert status["challenge"] == "dns-01 (Cloudflare)" and status["eligibility_problems"] == []
@@ -443,7 +442,7 @@ def test_create_on_cloudflare_zone(cf_system: dict[str, Any]) -> None:
 
 
 def test_create_with_no_cloudflare_and_foreign_record(cf_system: dict[str, Any]) -> None:
-    from domainpilot.sites.lifecycle import CreateRequest
+    from ozenix.sites.lifecycle import CreateRequest
 
     plain = cf_system["cf_manager"]().create(CreateRequest("a.example.com", cloudflare=False))
     assert plain["cloudflare"] is None and cf_system["cf"].records == {}
@@ -455,7 +454,7 @@ def test_create_with_no_cloudflare_and_foreign_record(cf_system: dict[str, Any])
 
 
 def test_cloudflare_sync_and_unmanaged_audit(cf_system: dict[str, Any]) -> None:
-    from domainpilot.sites.lifecycle import CreateRequest
+    from ozenix.sites.lifecycle import CreateRequest
 
     mgr = cf_system["cf_manager"]()
     mgr.create(CreateRequest("c.example.com", cloudflare=False))
@@ -476,10 +475,10 @@ def test_cloudflare_sync_and_unmanaged_audit(cf_system: dict[str, Any]) -> None:
 def _ctx(
     cf_system: dict[str, Any], domain: str | None = "dp.example.com", dry_run: bool = False
 ) -> Any:
-    from domainpilot.cli.context import Context
-    from domainpilot.core.config import Config
-    from domainpilot.core.output import Output
-    from domainpilot.core.sysinfo import SystemProbe
+    from ozenix.cli.context import Context
+    from ozenix.core.config import Config
+    from ozenix.core.output import Output
+    from ozenix.core.sysinfo import SystemProbe
 
     out = Output(stdout=io.StringIO(), stderr=io.StringIO())
     ctx = Context(
@@ -497,7 +496,7 @@ def _ctx(
 
 
 def test_cf_handlers(cf_system: dict[str, Any], monkeypatch: pytest.MonkeyPatch) -> None:
-    from domainpilot.sites.lifecycle import CreateRequest
+    from ozenix.sites.lifecycle import CreateRequest
 
     monkeypatch.setattr(cf_handlers, "_manager", lambda ctx: cf_system["cf_manager"](ctx.dry_run))
     cf_system["cf_manager"]().create(CreateRequest("dp.example.com", cloudflare=True))

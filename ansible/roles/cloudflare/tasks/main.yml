@@ -46,7 +46,7 @@
 # files, even though their content is encrypted with this host's key.
 - name: Find stored secrets
   ansible.builtin.find:
-    paths: /etc/domainpilot/secrets
+    paths: /etc/ozenix/secrets
     patterns: "*.cred"
     recurse: true
   register: cloudflare_secret_files

@@ -1,12 +1,12 @@
 #cloud-config
-# Disposable Ozenix test VM. NEVER use this on a production host.
+# Disposable ozenix test VM. NEVER use this on a production host.
 package_update: true
 packages:
   - python3-pytest
   - nftables
   - apparmor-utils
 write_files:
-  - path: /etc/domainpilot-test-vm
+  - path: /etc/ozenix-test-vm
     permissions: "0644"
     content: |
-      This host is a disposable Ozenix test VM. Destructive tests are allowed here.
+      This host is a disposable ozenix test VM. Destructive tests are allowed here.

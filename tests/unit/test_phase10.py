@@ -13,18 +13,18 @@ from typing import Any
 import pytest
 from test_phase8 import _ctx, creds_runner, settings
 
-from domainpilot import __version__, release
-from domainpilot.backup import config as bconf
-from domainpilot.backup.manager import BackupManager
-from domainpilot.backup.restic import Restic, Snapshot
-from domainpilot.cli import backup_handlers
-from domainpilot.core import fsutil, proc
-from domainpilot.core.audit import AuditLog
-from domainpilot.core.errors import OperationFailed, PreconditionFailed, UsageError
-from domainpilot.core.secrets import SecretStore
-from domainpilot.security import host_audit as ha
-from domainpilot.security.report import SecurityReport
-from domainpilot.sites.lifecycle import CreateRequest
+from ozenix import __version__, release
+from ozenix.backup import config as bconf
+from ozenix.backup.manager import BackupManager
+from ozenix.backup.restic import Restic, Snapshot
+from ozenix.cli import backup_handlers
+from ozenix.core import fsutil, proc
+from ozenix.core.audit import AuditLog
+from ozenix.core.errors import OperationFailed, PreconditionFailed, UsageError
+from ozenix.core.secrets import SecretStore
+from ozenix.security import host_audit as ha
+from ozenix.security.report import SecurityReport
+from ozenix.sites.lifecycle import CreateRequest
 
 # --- versions and the upgrade policy -------------------------------------------------------
 
@@ -285,8 +285,8 @@ def test_restic_key_commands() -> None:
     replies["config"] = proc.Result((), 0, "", "")
     assert r.probe() == "ok"
     assert r.current_key_id() == "bbbb2222"
-    r.add_key(Path("/run/domainpilot/x.pw"))
-    assert "--new-password-file=/run/domainpilot/x.pw" in calls[-1]
+    r.add_key(Path("/run/ozenix/x.pw"))
+    assert "--new-password-file=/run/ozenix/x.pw" in calls[-1]
     r.remove_key("aaaa1111")
     assert calls[-1][-1] == "aaaa1111"
     with pytest.raises(Exception, match="invalid restic key id"):
@@ -398,12 +398,12 @@ def test_create_with_tenant_id(system: dict[str, Any], monkeypatch: pytest.Monke
 
 def test_code_tree_symlink_rules(tmp_path: Path) -> None:
     view = ha.HostView(root=tmp_path)
-    code = tmp_path / "usr/lib/domainpilot"
+    code = tmp_path / "usr/lib/ozenix"
     (code / "releases" / "0.10.0").mkdir(parents=True)
     for d in (code, code / "releases", code / "releases" / "0.10.0"):
         d.chmod(0o755)
     (code / "current").symlink_to("releases/0.10.0")
-    rule = ha.PathRule("/usr/lib/domainpilot", 0o755, os.getuid(), "C", recursive_files=0o755)
+    rule = ha.PathRule("/usr/lib/ozenix", 0o755, os.getuid(), "C", recursive_files=0o755)
     rep = SecurityReport("x")
     ha.check_paths(view, rep, [rule])
     assert rep.worst == "ok", rep.findings[0].detail

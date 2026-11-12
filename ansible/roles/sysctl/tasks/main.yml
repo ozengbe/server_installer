@@ -32,7 +32,7 @@
 - name: Kernel and network hardening sysctls
   ansible.builtin.template:
     src: sysctl.conf.j2
-    dest: /etc/sysctl.d/99-zz-domainpilot.conf
+    dest: /etc/sysctl.d/99-zz-ozenix.conf
     owner: root
     group: root
     mode: "0644"
@@ -48,7 +48,7 @@
 
 # Re-apply when the file changed OR something at runtime drifted a value.
 - name: Apply sysctls
-  ansible.builtin.command: /usr/sbin/sysctl --load /etc/sysctl.d/99-zz-domainpilot.conf
+  ansible.builtin.command: /usr/sbin/sysctl --load /etc/sysctl.d/99-zz-ozenix.conf
   when: >-
     dp_sysctl_file is changed
     or (dp_sysctl_before.results | map(attribute='stdout') | map('trim') | list)

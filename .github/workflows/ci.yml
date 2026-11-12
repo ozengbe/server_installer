@@ -23,8 +23,8 @@ jobs:
       - name: Release build (unsigned snapshot)
         run: |
           tools/ci/step.sh "release build" plain -- bash tools/release.sh --snapshot --out dist
-          mkdir dist/x && tar -xzf dist/domainpilot-*.tar.gz -C dist/x
-          cd dist/x/domainpilot-* && sha256sum --quiet --strict -c MANIFEST.sha256
+          mkdir dist/x && tar -xzf dist/ozenix-*.tar.gz -C dist/x
+          cd dist/x/ozenix-* && sha256sum --quiet --strict -c MANIFEST.sha256
 
   integration:
     # GitHub-hosted runners are disposable Ubuntu 24.04 VMs with systemd and sudo.
@@ -35,11 +35,11 @@ jobs:
       - uses: actions/checkout@v5
       - name: Prepare disposable test host
         run: |
-          echo "GitHub Actions runner (disposable)" | sudo tee /etc/domainpilot-test-vm
+          echo "GitHub Actions runner (disposable)" | sudo tee /etc/ozenix-test-vm
           sudo apt-get update -qq
           sudo apt-get install -y -qq python3-pytest
           # The runner image ships MySQL, PHP (third-party PPA), nginx and Apache.
-          # A real Ozenix host starts clean; remove them so the test is representative.
+          # A real ozenix host starts clean; remove them so the test is representative.
           sudo systemctl stop mysql nginx apache2 2>/dev/null || true
           sudo apt-get purge -y -qq 'mysql-*' 'php*' 'nginx*' 'apache2*' 'libapache2-*' || true
           sudo rm -f /etc/apt/sources.list.d/*ondrej* /etc/apt/sources.list.d/*php*

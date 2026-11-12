@@ -3,8 +3,8 @@ requires = ["setuptools>=69"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "domainpilot"
-description = "Ozenix Secure Server Management Platform"
+name = "ozenix"
+description = "ozenix Secure Server Management Platform"
 requires-python = ">=3.12"
 dynamic = ["version"]
 # Runtime is deliberately stdlib-only: nothing from PyPI ever runs as root on servers.
@@ -20,10 +20,10 @@ dev = [
 ]
 
 [tool.setuptools.dynamic]
-version = { attr = "domainpilot.__version__" }
+version = { attr = "ozenix.__version__" }
 
 [tool.setuptools.packages.find]
-include = ["domainpilot*"]
+include = ["ozenix*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests/unit", "tests/security"]
@@ -36,7 +36,7 @@ markers = [
 [tool.mypy]
 python_version = "3.12"
 strict = true
-files = ["domainpilot", "tests"]
+files = ["ozenix", "tests"]
 
 [tool.ruff]
 target-version = "py312"
@@ -52,7 +52,7 @@ ignore = ["N818"]
 "tests/**" = ["S101", "S105", "S106", "S603", "S108", "S311", "PTH"]
 # core/ uses os-level calls deliberately: fd-based, O_NOFOLLOW and dir_fd
 # semantics that pathlib does not expose.
-"domainpilot/core/**" = ["PTH"]
+"ozenix/core/**" = ["PTH"]
 # The mariadb CLI has no parameter binding; every identifier is validated
 # (validate.tenant_id / db_name) and passwords are token_urlsafe before use.
-"domainpilot/isolation/db.py" = ["S608"]
+"ozenix/isolation/db.py" = ["S608"]

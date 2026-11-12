@@ -38,14 +38,28 @@ First packaged release. Supports Ubuntu 24.04 and 26.04 LTS.
   - the admin guide and runbooks.
 
 ### Changed (Cloudflare and HTTPS, the CloudPanel way)
-- **Ozenix no longer touches DNS by default.** Point the records at the server yourself, with the Cloudflare proxy on or off. Proxied DNS records are now opt-in: `create --cloudflare-dns`.
+- **ozenix no longer touches DNS by default.** Point the records at the server yourself, with the Cloudflare proxy on or off. Proxied DNS records are now opt-in: `create --cloudflare-dns`.
 - **Every new site gets a self-signed placeholder certificate at once**, so HTTPS works immediately behind Cloudflare (SSL/TLS mode "Full"). Plain HTTP keeps working for direct visitors until Let's Encrypt issues a real certificate.
 - **Names proxied through Cloudflare count as pointing at this server** when checking whether a certificate can be issued. The Let's Encrypt challenge passes through the proxy.
 - **AutoSSL retries automatically.** The 5-minute self-check requests the certificate once DNS is ready, at most once an hour per site.
 - `site help` lists the common tasks: sites, HTTPS, SFTP, database, backups. `--no-ssl` now works: it skips Let's Encrypt for that site.
 
+### Added (CloudPanel-style sites)
+- **Each site has its own named Linux user:** `create --user john --key john.pub`. It logs in with an SSH key, and gets SFTP and a shell in its own site. On a terminal, `create` asks for the name and key.
+- **The server's own login is left as it is:** root, passwords, your accounts. The admin list (`dp_admins`) is optional.
+- **PHP 8.2, 8.3, 8.4 and 8.5 side by side**, chosen per site (`--php`, `site <d> php <v>`). They come from ppa:ondrej/php, with its key pinned. On 26.04 only 8.5 is available until the PPA supports that release.
+- **Node.js sites** (`--type nodejs`, Node.js 22/24/26 from signed official builds) and **Python sites** (`--type python`). Each runs as a sandboxed app service behind nginx, on a reserved local port only that site may use. Managed with `site <d> app status|restart|set`.
+
+- **Laravel sites** (`--type laravel`):
+  - code stays read-only for PHP; storage and caches live in `data/`;
+  - only `public/index.php` runs PHP;
+  - `/storage` URLs are served from `data/` with PHP never executed there;
+  - a built-in scheduler timer, and an optional queue worker (`site <d> laravel queue on`).
+- **.env protection** for all sites: `site <d> env protect` (owner = site user, mode 0640). `site <d> security` checks for a `.env` in web folders, its permissions, `APP_DEBUG`, `APP_ENV` and `APP_KEY`, without ever printing values. Site users' shells use `umask 027`.
+- Composer is installed for site users.
+
 ### Upgrade notes
-- Hosts installed from a git checkout before 0.10.0 are treated as version 0.0.0 and upgraded. The CLI moves from `/usr/lib/domainpilot/domainpilot` to `/usr/lib/domainpilot/releases/0.10.0`.
+- Hosts installed from a git checkout before 0.10.0 are treated as version 0.0.0 and upgraded. The CLI moves from `/usr/lib/ozenix/ozenix` to `/usr/lib/ozenix/releases/0.10.0`.
 
 ### Known limits
 See [docs/security-report.md](docs/security-report.md) §4. Most important:

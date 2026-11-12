@@ -11,20 +11,20 @@ from typing import Any
 
 import pytest
 
-from domainpilot.cli import tls_handlers
-from domainpilot.core import proc
-from domainpilot.core.config import Config, load
-from domainpilot.core.errors import (
+from ozenix.cli import tls_handlers
+from ozenix.core import proc
+from ozenix.core.config import Config, load
+from ozenix.core.errors import (
     NotImplementedYet,
     OperationFailed,
     PreconditionFailed,
     ValidationError,
 )
-from domainpilot.core.output import Output
-from domainpilot.core.paths import Paths
-from domainpilot.tls import dns
-from domainpilot.tls.acme import Certbot, CertInfo, parse_x509_text, validate_email
-from domainpilot.web.nginx import Nginx, TlsFiles
+from ozenix.core.output import Output
+from ozenix.core.paths import Paths
+from ozenix.tls import dns
+from ozenix.tls.acme import Certbot, CertInfo, parse_x509_text, validate_email
+from ozenix.web.nginx import Nginx, TlsFiles
 
 NOW = datetime(2026, 11, 9, 12, 0, tzinfo=UTC)
 
@@ -261,7 +261,7 @@ def test_ssl_config(tmp_path: Path) -> None:
 
 @pytest.fixture
 def tls_system(system: dict[str, Any], ca: FakeCA) -> dict[str, Any]:
-    from domainpilot.sites.lifecycle import SiteManager
+    from ozenix.sites.lifecycle import SiteManager
 
     resolver_table: dict[str, set[str]] = {}
     base = system["manager"]
@@ -281,7 +281,7 @@ def tls_system(system: dict[str, Any], ca: FakeCA) -> dict[str, Any]:
 
 
 def test_create_with_autossl_when_dns_ready(tls_system: dict[str, Any]) -> None:
-    from domainpilot.sites.lifecycle import CreateRequest
+    from ozenix.sites.lifecycle import CreateRequest
 
     tls_system["dns"].update(
         {"example.com": {"80.241.220.98"}, "www.example.com": {"80.241.220.98"}}
@@ -297,7 +297,7 @@ def test_create_with_autossl_when_dns_ready(tls_system: dict[str, Any]) -> None:
 
 
 def test_create_without_dns_stays_http(tls_system: dict[str, Any]) -> None:
-    from domainpilot.sites.lifecycle import CreateRequest
+    from ozenix.sites.lifecycle import CreateRequest
 
     result = tls_system["tls_manager"]().create(CreateRequest("example.com"))
     assert result["ssl"].startswith("not issued yet")
@@ -309,7 +309,7 @@ def test_create_without_dns_stays_http(tls_system: dict[str, Any]) -> None:
 
 
 def test_failed_verification_keeps_http(tls_system: dict[str, Any]) -> None:
-    from domainpilot.sites.lifecycle import CreateRequest
+    from ozenix.sites.lifecycle import CreateRequest
 
     mgr = tls_system["tls_manager"](autossl=False)
     mgr.create(CreateRequest("example.com"))
@@ -322,7 +322,7 @@ def test_failed_verification_keeps_http(tls_system: dict[str, Any]) -> None:
 
 
 def test_renew_revoke_autossl(tls_system: dict[str, Any]) -> None:
-    from domainpilot.sites.lifecycle import CreateRequest
+    from ozenix.sites.lifecycle import CreateRequest
 
     mgr = tls_system["tls_manager"](autossl=False)
     mgr.create(CreateRequest("example.com"))
@@ -349,7 +349,7 @@ def test_renew_revoke_autossl(tls_system: dict[str, Any]) -> None:
 
 
 def test_purge_deletes_certificate(tls_system: dict[str, Any]) -> None:
-    from domainpilot.sites.lifecycle import CreateRequest
+    from ozenix.sites.lifecycle import CreateRequest
 
     tls_system["dns"]["example.com"] = {"80.241.220.98"}
     mgr = tls_system["tls_manager"]()
@@ -359,7 +359,7 @@ def test_purge_deletes_certificate(tls_system: dict[str, Any]) -> None:
 
 
 def test_tls_dry_runs(tls_system: dict[str, Any]) -> None:
-    from domainpilot.sites.lifecycle import CreateRequest
+    from ozenix.sites.lifecycle import CreateRequest
 
     tls_system["dns"]["example.com"] = {"80.241.220.98"}
     tls_system["tls_manager"]().create(CreateRequest("example.com"))
@@ -374,9 +374,9 @@ def test_tls_dry_runs(tls_system: dict[str, Any]) -> None:
 
 
 def test_tls_handlers(tls_system: dict[str, Any], monkeypatch: pytest.MonkeyPatch) -> None:
-    from domainpilot.cli.context import Context
-    from domainpilot.core.sysinfo import SystemProbe
-    from domainpilot.sites.lifecycle import CreateRequest
+    from ozenix.cli.context import Context
+    from ozenix.core.sysinfo import SystemProbe
+    from ozenix.sites.lifecycle import CreateRequest
 
     monkeypatch.setattr(
         tls_handlers, "_manager", lambda ctx: tls_system["tls_manager"](ctx.dry_run)
@@ -413,7 +413,7 @@ def test_tls_handlers(tls_system: dict[str, Any], monkeypatch: pytest.MonkeyPatc
 
 def _with_openssl(m: Any) -> Any:
     """Let the placeholder's openssl call create real files."""
-    from domainpilot.tls import selfsigned
+    from ozenix.tls import selfsigned
 
     original = m.run
 
@@ -428,8 +428,8 @@ def _with_openssl(m: Any) -> Any:
 
 
 def test_new_site_gets_self_signed_https(tls_system: dict[str, Any]) -> None:
-    from domainpilot.sites.lifecycle import CreateRequest
-    from domainpilot.tls import selfsigned
+    from ozenix.sites.lifecycle import CreateRequest
+    from ozenix.tls import selfsigned
 
     mgr = _with_openssl(tls_system["tls_manager"]())
     result = mgr.create(CreateRequest("example.com", aliases=["www.example.com"]))
@@ -457,7 +457,7 @@ def test_new_site_gets_self_signed_https(tls_system: dict[str, Any]) -> None:
 
 
 def test_placeholder_failure_keeps_http(tls_system: dict[str, Any]) -> None:
-    from domainpilot.sites.lifecycle import CreateRequest
+    from ozenix.sites.lifecycle import CreateRequest
 
     mgr = tls_system["tls_manager"]()  # openssl "runs" but writes nothing
     mgr.create(CreateRequest("example.com"))
@@ -468,8 +468,8 @@ def test_placeholder_failure_keeps_http(tls_system: dict[str, Any]) -> None:
 def test_cloudflare_proxied_names_are_eligible(tls_system: dict[str, Any], tmp_path: Path) -> None:
     import ipaddress
 
-    from domainpilot.sites.lifecycle import CreateRequest
-    from domainpilot.tls import dns
+    from ozenix.sites.lifecycle import CreateRequest
+    from ozenix.tls import dns
 
     conf = tmp_path / "realip.conf"
     conf.write_text(
@@ -492,7 +492,7 @@ def test_cloudflare_proxied_names_are_eligible(tls_system: dict[str, Any], tmp_p
 
 
 def test_autossl_retry_issues_when_dns_is_ready(tls_system: dict[str, Any]) -> None:
-    from domainpilot.sites.lifecycle import CreateRequest
+    from ozenix.sites.lifecycle import CreateRequest
 
     mgr = tls_system["tls_manager"]()
     mgr.create(CreateRequest("example.com"))

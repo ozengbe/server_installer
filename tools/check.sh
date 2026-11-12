@@ -7,7 +7,7 @@ cd "$(dirname "$0")/.."
 echo "== ruff";        ruff check .
 echo "== ruff format"; ruff format --check .
 echo "== mypy";        mypy
-echo "== pytest";      pytest --cov=domainpilot --cov-report=term-missing --cov-fail-under=90
+echo "== pytest";      pytest --cov=ozenix --cov-report=term-missing --cov-fail-under=90
 
 if command -v shellcheck >/dev/null 2>&1; then
   echo "== shellcheck"

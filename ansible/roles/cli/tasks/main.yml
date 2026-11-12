@@ -4,7 +4,7 @@
 # system itself.
 #
 # Upgrade path (docs/upgrade.md): each release gets its own directory
-# /usr/lib/domainpilot/releases/<version>, and /usr/lib/domainpilot/current
+# /usr/lib/ozenix/releases/<version>, and /usr/lib/ozenix/current
 # is switched to it with one atomic symlink replacement. Old and new modules
 # never mix, and the previous release stays on disk for diagnosis.
 
@@ -16,14 +16,14 @@
     group: root
     mode: "0755"
   loop:
-    - /usr/lib/domainpilot
-    - /usr/lib/domainpilot/releases
-    - "/usr/lib/domainpilot/releases/{{ dp_version }}"
+    - /usr/lib/ozenix
+    - /usr/lib/ozenix/releases
+    - "/usr/lib/ozenix/releases/{{ dp_version }}"
 
-- name: Install the Ozenix Python package
+- name: Install the ozenix Python package
   ansible.builtin.copy:
-    src: "{{ playbook_dir }}/../domainpilot/"
-    dest: "/usr/lib/domainpilot/releases/{{ dp_version }}/domainpilot/"
+    src: "{{ playbook_dir }}/../ozenix/"
+    dest: "/usr/lib/ozenix/releases/{{ dp_version }}/ozenix/"
     owner: root
     group: root
     mode: "u=rwX,go=rX"
@@ -31,7 +31,7 @@
 
 - name: Remove bytecode copied from a development tree
   ansible.builtin.find:
-    paths: "/usr/lib/domainpilot/releases/{{ dp_version }}/domainpilot"
+    paths: "/usr/lib/ozenix/releases/{{ dp_version }}/ozenix"
     patterns: __pycache__
     file_type: directory
     recurse: true
@@ -52,8 +52,8 @@
       - /usr/bin/python3
       - -IB
       - -c
-      - "import sys; sys.path.insert(0, sys.argv[1]); import domainpilot.cli.main, domainpilot.release; print(domainpilot.__version__)"
-      - "/usr/lib/domainpilot/releases/{{ dp_version }}"
+      - "import sys; sys.path.insert(0, sys.argv[1]); import ozenix.cli.main, ozenix.release; print(ozenix.__version__)"
+      - "/usr/lib/ozenix/releases/{{ dp_version }}"
   register: cli_import
   changed_when: false
   failed_when: cli_import.rc != 0 or cli_import.stdout != dp_version
@@ -61,7 +61,7 @@
 - name: Switch to this release (atomic symlink replacement)
   ansible.builtin.file:
     src: "releases/{{ dp_version }}"
-    dest: /usr/lib/domainpilot/current
+    dest: /usr/lib/ozenix/current
     state: link
     force: true
     owner: root
@@ -77,12 +77,12 @@
 
 - name: Remove the pre-0.10 package location
   ansible.builtin.file:
-    path: /usr/lib/domainpilot/domainpilot
+    path: /usr/lib/ozenix/ozenix
     state: absent
 
 - name: List installed releases
   ansible.builtin.find:
-    paths: /usr/lib/domainpilot/releases
+    paths: /usr/lib/ozenix/releases
     file_type: directory
   register: cli_releases
   changed_when: false
@@ -104,9 +104,9 @@
 # truncated without first removing the flag, which `site system audit` reports
 # (AUDIT-APPEND-ONLY). No logrotate for this file: it grows slowly (one line
 # per privileged operation).
-- name: Ozenix log directory
+- name: Log directory for ozenix
   ansible.builtin.file:
-    path: /var/log/domainpilot
+    path: /var/log/ozenix
     state: directory
     owner: root
     group: root
@@ -114,7 +114,7 @@
 
 - name: Audit log file exists
   ansible.builtin.file:
-    path: /var/log/domainpilot/audit.jsonl
+    path: /var/log/ozenix/audit.jsonl
     state: touch
     owner: root
     group: root
@@ -123,20 +123,20 @@
     access_time: preserve
 
 - name: Read audit log attributes
-  ansible.builtin.command: /usr/bin/lsattr -d /var/log/domainpilot/audit.jsonl
+  ansible.builtin.command: /usr/bin/lsattr -d /var/log/ozenix/audit.jsonl
   register: cli_audit_attrs
   changed_when: false
   tags: [host-kernel]
 
 - name: Make the audit log append-only
-  ansible.builtin.command: /usr/bin/chattr +a /var/log/domainpilot/audit.jsonl
+  ansible.builtin.command: /usr/bin/chattr +a /var/log/ozenix/audit.jsonl
   when: "'a' not in cli_audit_attrs.stdout.split()[0]"
   changed_when: true
   tags: [host-kernel]
 
 # Welcome screen at SSH login (Ubuntu's update-motd). Ubuntu's own help text
-# and news are switched off so the login shows Ozenix's information instead.
-- name: Ozenix welcome screen
+# and news are switched off so the login shows ozenix's information instead.
+- name: Welcome screen (ozenix)
   ansible.builtin.template:
     src: ozenix-motd.sh.j2
     dest: /etc/update-motd.d/05-ozenix
@@ -165,3 +165,13 @@
   when: dp_motd_enabled | bool
   loop_control:
     label: "{{ item.item }}"
+
+# After an upgrade, bring every existing site up to the new release's
+# templates (nginx, sandbox units, AppArmor profiles, site-user limits).
+# Only differing files are rewritten, so a second run changes nothing.
+- name: Re-apply every site's configuration
+  ansible.builtin.command: /usr/local/bin/site --json system refresh
+  register: cli_refresh
+  changed_when: (cli_refresh.stdout | from_json).result.changed | length > 0
+  failed_when: cli_refresh.rc not in [0]
+  when: not ansible_check_mode

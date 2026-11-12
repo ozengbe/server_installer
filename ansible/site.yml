@@ -1,11 +1,11 @@
 ---
-# Ozenix host baseline.
+# ozenix host baseline.
 # Phase 2a: preflight, base, sysctl, apparmor, admins, ssh, firewall.
 # Phase 2b: nginx, php, mariadb, cache (redis|valkey), fail2ban, updates.
 # Phase 6: acme (certbot, renewal timer, nginx deploy hook).
 # Phase 4: isolation (tenant sandbox templates), cli (the `site` command).
 # Phase 8: backup (restic, nightly + weekly drill), monitoring (self-check, alerts).
-- name: Ozenix host baseline
+- name: Host baseline (ozenix)
   hosts: all
   become: true
   gather_facts: true
@@ -30,6 +30,8 @@
       tags: [nginx, services]
     - role: php
       tags: [php, services]
+    - role: runtimes
+      tags: [runtimes, services]
     - role: mariadb
       tags: [mariadb, services]
     - role: cache

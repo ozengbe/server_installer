@@ -14,7 +14,7 @@
 
 - name: Default MariaDB sizing (owned by the optimizer afterwards)
   ansible.builtin.copy:
-    dest: /etc/mysql/mariadb.conf.d/98-domainpilot-tuning.cnf
+    dest: /etc/mysql/mariadb.conf.d/98-ozenix-tuning.cnf
     force: false
     owner: root
     group: root
@@ -29,8 +29,8 @@
   block:
     - name: MariaDB hardening configuration
       ansible.builtin.template:
-        src: 99-domainpilot.cnf.j2
-        dest: /etc/mysql/mariadb.conf.d/99-domainpilot.cnf
+        src: 99-ozenix.cnf.j2
+        dest: /etc/mysql/mariadb.conf.d/99-ozenix.cnf
         owner: root
         group: root
         mode: "0644"
@@ -49,7 +49,7 @@
     - name: Restore previous MariaDB configuration
       ansible.builtin.copy:
         src: "{{ mariadb_cnf.backup_file }}"
-        dest: /etc/mysql/mariadb.conf.d/99-domainpilot.cnf
+        dest: /etc/mysql/mariadb.conf.d/99-ozenix.cnf
         remote_src: true
         owner: root
         group: root
@@ -58,7 +58,7 @@
 
     - name: Remove new MariaDB configuration that had no predecessor
       ansible.builtin.file:
-        path: /etc/mysql/mariadb.conf.d/99-domainpilot.cnf
+        path: /etc/mysql/mariadb.conf.d/99-ozenix.cnf
         state: absent
       when: mariadb_cnf.backup_file is not defined
 
@@ -81,12 +81,12 @@
 
 - name: Bounded self-healing for MariaDB
   ansible.builtin.copy:
-    dest: /etc/systemd/system/mariadb.service.d/90-domainpilot.conf
+    dest: /etc/systemd/system/mariadb.service.d/90-ozenix.conf
     owner: root
     group: root
     mode: "0644"
     content: |
-      # Managed by Ozenix
+      # Managed by ozenix
       [Unit]
       StartLimitIntervalSec=600
       StartLimitBurst=3

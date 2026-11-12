@@ -1,6 +1,6 @@
 """Static guard rails for the root-run code base (architecture §5).
 
-These tests fail the build if code under ``domainpilot/`` uses constructs that
+These tests fail the build if code under ``ozenix/`` uses constructs that
 are forbidden for a program that runs as root and handles untrusted input.
 """
 
@@ -10,7 +10,7 @@ import ast
 from dataclasses import dataclass
 from pathlib import Path
 
-PKG_ROOT = Path(__file__).resolve().parents[2] / "domainpilot"
+PKG_ROOT = Path(__file__).resolve().parents[2] / "ozenix"
 
 # The single module allowed to import subprocess (added in Phase 3).
 SUBPROCESS_ALLOWED = {PKG_ROOT / "core" / "proc.py"}
@@ -62,7 +62,7 @@ def _scan(path: Path) -> list[Violation]:
                 if root in FORBIDDEN_IMPORTS:
                     add(node, f"forbidden import {name!r}")
                 if root == "subprocess" and path not in SUBPROCESS_ALLOWED:
-                    add(node, "subprocess may only be used via domainpilot.core.proc")
+                    add(node, "subprocess may only be used via ozenix.core.proc")
         elif isinstance(node, ast.Call):
             func = node.func
             if isinstance(func, ast.Name) and func.id in FORBIDDEN_BUILTINS:
@@ -107,4 +107,4 @@ def test_scanner_detects_violations(tmp_path: Path) -> None:
     assert "shell= must be literally False" in messages
     assert "forbidden builtin eval()" in messages
     assert "forbidden import 'pickle'" in messages
-    assert "subprocess may only be used via domainpilot.core.proc" in messages
+    assert "subprocess may only be used via ozenix.core.proc" in messages

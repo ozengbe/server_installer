@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 from conftest import RunCli
 
-from domainpilot.core.errors import ExitCode
+from ozenix.core.errors import ExitCode
 
 HOSTILE_TARGETS = [
     "example.com;id",

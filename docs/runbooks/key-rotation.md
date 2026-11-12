@@ -21,7 +21,7 @@ Rotate on a schedule, when someone with access leaves, and **immediately** if a 
 
 ## Admin SSH keys
 
-1. Edit `dp_admins` in `/etc/domainpilot/install.yml` and add the **new** key next to the old one.
+1. Edit `dp_admins` in `/etc/ozenix/install.yml` and add the **new** key next to the old one.
 2. Run `sudo installer/install.sh` from the current release directory.
 3. Open a **new** session with the new key.
 4. Only if that works, remove the old key from the file and run the installer again.

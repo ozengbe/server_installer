@@ -16,7 +16,7 @@ echo "$journal"
 annotate "diag: tenant service journal" "$(echo "$journal" | grep -viE 'Started|Starting|Stopping|Stopped|Deactivated|Consumed' | tail -n 25)"
 
 echo "== PHP-FPM logs (worker deaths, startup errors)"
-fpm=$(for f in /var/log/domainpilot/tenants/*/php-fpm.log /var/log/domainpilot/tenants/*/php-error.log; do
+fpm=$(for f in /var/log/ozenix/tenants/*/php-fpm.log /var/log/ozenix/tenants/*/php-error.log; do
   [[ -s $f ]] || continue
   echo "--- $f"
   tail -n 15 "$f"

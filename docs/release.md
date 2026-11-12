@@ -1,4 +1,4 @@
-# Making an Ozenix release (maintainers)
+# Making an ozenix release (maintainers)
 
 Administrators install only **signed release tarballs**. This page covers how one is made.
 
@@ -6,9 +6,9 @@ Administrators install only **signed release tarballs**. This page covers how on
 
 | File | What it is |
 |---|---|
-| `domainpilot-<version>.tar.gz` | The tagged commit's `installer/`, `ansible/`, `bin/`, `domainpilot/`, `docs/`, `release/`, `README.md` and `CHANGELOG.md`, plus `RELEASE` (version and commit) and `MANIFEST.sha256` (every file). Reproducible: built twice from the same tag, the bytes are identical. |
+| `ozenix-<version>.tar.gz` | The tagged commit's `installer/`, `ansible/`, `bin/`, `ozenix/`, `docs/`, `release/`, `README.md` and `CHANGELOG.md`, plus `RELEASE` (version and commit) and `MANIFEST.sha256` (every file). Reproducible: built twice from the same tag, the bytes are identical. |
 | `SHA256SUMS` | Checksum of the tarball |
-| `SHA256SUMS.sig` | SSH signature of `SHA256SUMS` (namespace `domainpilot-release`) |
+| `SHA256SUMS.sig` | SSH signature of `SHA256SUMS` (namespace `ozenix-release`) |
 
 The chain of trust:
 1. The signature proves `SHA256SUMS`.
@@ -21,15 +21,15 @@ We use SSH signatures (`ssh-keygen -Y`) because every Ubuntu server already has 
 
 1. Create a **dedicated** key. Use a hardware-backed one if possible:
    ```bash
-   ssh-keygen -t ed25519-sk -C "domainpilot release" -f ~/.ssh/domainpilot-release   # security key
-   # or: ssh-keygen -t ed25519 -C "domainpilot release" -f ~/.ssh/domainpilot-release
+   ssh-keygen -t ed25519-sk -C "ozenix release" -f ~/.ssh/ozenix-release   # security key
+   # or: ssh-keygen -t ed25519 -C "ozenix release" -f ~/.ssh/ozenix-release
    ```
    Never use it for anything else, and keep it off servers.
 2. Add the public key to `release/allowed_signers`:
    ```
-   release@domainpilot namespaces="domainpilot-release" ssh-ed25519 AAAA... domainpilot release
+   release@ozenix namespaces="ozenix-release" ssh-ed25519 AAAA... ozenix release
    ```
-3. Publish its fingerprint (`ssh-keygen -lf ~/.ssh/domainpilot-release.pub`) in the table below **and** somewhere that doesn't depend on this repository, such as the project website or a pinned issue. Administrators compare the two.
+3. Publish its fingerprint (`ssh-keygen -lf ~/.ssh/ozenix-release.pub`) in the table below **and** somewhere that doesn't depend on this repository, such as the project website or a pinned issue. Administrators compare the two.
 
 | Key | Fingerprint | Valid from | Valid until |
 |---|---|---|---|
@@ -43,11 +43,11 @@ We use SSH signatures (`ssh-keygen -Y`) because every Ubuntu server already has 
    - CI is green on `main`, including the integration job;
    - the integration suite passed on a real 26.04 host;
    - `docs/roadmap.md` and `docs/security-report.md` are up to date.
-2. Set the version in `domainpilot/__init__.py` (`MAJOR.MINOR.PATCH`, `rcN` for candidates). Add a `## <version>` section to `CHANGELOG.md` with upgrade notes. Commit.
+2. Set the version in `ozenix/__init__.py` (`MAJOR.MINOR.PATCH`, `rcN` for candidates). Add a `## <version>` section to `CHANGELOG.md` with upgrade notes. Commit.
 3. Tag and build:
    ```bash
-   git tag -s v0.10.0 -m "Ozenix 0.10.0"
-   bash tools/release.sh --key ~/.ssh/domainpilot-release
+   git tag -s v0.10.0 -m "ozenix 0.10.0"
+   bash tools/release.sh --key ~/.ssh/ozenix-release
    ```
    The script refuses to build if:
    - the working tree is dirty;

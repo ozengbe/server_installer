@@ -36,7 +36,7 @@
     group: root
     mode: "0644"
     content: |
-      # Managed by Ozenix
+      # Managed by ozenix
       Types: deb
       URIs: https://nginx.org/packages/ubuntu
       Suites: {{ ansible_facts['distribution_release'] }}
@@ -46,12 +46,12 @@
 
 - name: Prefer nginx.org packages for nginx only
   ansible.builtin.copy:
-    dest: /etc/apt/preferences.d/99-domainpilot-nginx
+    dest: /etc/apt/preferences.d/99-ozenix-nginx
     owner: root
     group: root
     mode: "0644"
     content: |
-      # Managed by Ozenix
+      # Managed by ozenix
       Package: *
       Pin: origin nginx.org
       Pin-Priority: 900
@@ -69,7 +69,7 @@
   failed_when: "'nginx' not in nginx_maint.stdout | lower or 'ubuntu' in nginx_maint.stdout | lower"
 
 # --- Configuration (validated; restored on failure) ---
-- name: Ozenix nginx directories
+- name: Nginx directories for ozenix
   ansible.builtin.file:
     path: "{{ item }}"
     state: directory
@@ -78,16 +78,16 @@
     mode: "0755"
   loop:
     - /etc/systemd/system/nginx.service.d
-    - /etc/nginx/domainpilot
-    - /etc/nginx/domainpilot/snippets
-    - /etc/nginx/domainpilot/sites
-    - /etc/nginx/domainpilot/default-tls
+    - /etc/nginx/ozenix
+    - /etc/nginx/ozenix/snippets
+    - /etc/nginx/ozenix/sites
+    - /etc/nginx/ozenix/default-tls
 
 # Per-tenant access/error logs. Root-owned on purpose (never tenant-owned): the
 # nginx master runs as root and opens these files.
 - name: Site log root
   ansible.builtin.file:
-    path: /var/log/nginx/domainpilot
+    path: /var/log/nginx/ozenix
     state: directory
     owner: root
     group: adm
@@ -95,13 +95,13 @@
 
 - name: Rotate site logs
   ansible.builtin.copy:
-    dest: /etc/logrotate.d/domainpilot-nginx
+    dest: /etc/logrotate.d/ozenix-nginx
     owner: root
     group: root
     mode: "0644"
     content: |
-      # Managed by Ozenix
-      /var/log/nginx/domainpilot/*/*.log {
+      # Managed by ozenix
+      /var/log/nginx/ozenix/*/*.log {
           daily
           rotate 14
           missingok
@@ -119,7 +119,7 @@
 # the installer must never undo `site system optimize`.
 - name: Default nginx tuning (events)
   ansible.builtin.copy:
-    dest: /etc/nginx/domainpilot/tuning-events.conf
+    dest: /etc/nginx/ozenix/tuning-events.conf
     force: false
     owner: root
     group: root
@@ -130,7 +130,7 @@
 
 - name: Default nginx tuning (http)
   ansible.builtin.copy:
-    dest: /etc/nginx/domainpilot/tuning-http.conf
+    dest: /etc/nginx/ozenix/tuning-http.conf
     force: false
     owner: root
     group: root
@@ -142,14 +142,14 @@
   ansible.builtin.command: >-
     /usr/bin/openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes
     -days 3650 -subj /CN=invalid
-    -keyout /etc/nginx/domainpilot/default-tls/key.pem
-    -out /etc/nginx/domainpilot/default-tls/cert.pem
+    -keyout /etc/nginx/ozenix/default-tls/key.pem
+    -out /etc/nginx/ozenix/default-tls/cert.pem
   args:
-    creates: /etc/nginx/domainpilot/default-tls/cert.pem
+    creates: /etc/nginx/ozenix/default-tls/cert.pem
 
 - name: Protect placeholder key
   ansible.builtin.file:
-    path: /etc/nginx/domainpilot/default-tls/key.pem
+    path: /etc/nginx/ozenix/default-tls/key.pem
     owner: root
     group: root
     mode: "0600"
@@ -206,7 +206,7 @@
 - name: Install systemd hardening for nginx
   ansible.builtin.copy:
     src: nginx-hardening.conf
-    dest: /etc/systemd/system/nginx.service.d/90-domainpilot.conf
+    dest: /etc/systemd/system/nginx.service.d/90-ozenix.conf
     owner: root
     group: root
     mode: "0644"

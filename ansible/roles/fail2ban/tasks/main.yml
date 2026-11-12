@@ -17,10 +17,10 @@
 
 - name: Apply fail2ban configuration with validation and restore on failure
   block:
-    - name: Ozenix jails
+    - name: Jails for ozenix
       ansible.builtin.template:
-        src: domainpilot.local.j2
-        dest: /etc/fail2ban/jail.d/domainpilot.local
+        src: ozenix.local.j2
+        dest: /etc/fail2ban/jail.d/ozenix.local
         owner: root
         group: root
         mode: "0644"
@@ -36,7 +36,7 @@
     - name: Restore previous jails
       ansible.builtin.copy:
         src: "{{ f2b_jails.backup_file }}"
-        dest: /etc/fail2ban/jail.d/domainpilot.local
+        dest: /etc/fail2ban/jail.d/ozenix.local
         remote_src: true
         owner: root
         group: root
@@ -45,7 +45,7 @@
 
     - name: Remove new jails that had no predecessor
       ansible.builtin.file:
-        path: /etc/fail2ban/jail.d/domainpilot.local
+        path: /etc/fail2ban/jail.d/ozenix.local
         state: absent
       when: f2b_jails.backup_file is not defined
 

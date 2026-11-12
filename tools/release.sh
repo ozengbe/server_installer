@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
-# Build an Ozenix release (docs/release.md).
+# Build an ozenix release (docs/release.md).
 #
-#   tools/release.sh --key ~/.ssh/domainpilot-release [--out DIR]   from tag v<version>
+#   tools/release.sh --key ~/.ssh/ozenix-release [--out DIR]   from tag v<version>
 #   tools/release.sh --snapshot [--out DIR]                         unsigned test build of HEAD
 #
 # Output in DIR (default dist/):
-#   domainpilot-<version>.tar.gz   git archive of the tag (reproducible: fixed
+#   ozenix-<version>.tar.gz   git archive of the tag (reproducible: fixed
 #                                  mtimes from the commit, gzip -n), with
 #                                  RELEASE (version, commit) and MANIFEST.sha256
 #                                  (every file; checked by installer/install.sh)
 #   SHA256SUMS                     checksum of the tarball
-#   SHA256SUMS.sig                 SSH signature, namespace "domainpilot-release",
+#   SHA256SUMS.sig                 SSH signature, namespace "ozenix-release",
 #                                  verifiable with release/allowed_signers
 set -euo pipefail
 export LC_ALL=C
@@ -22,9 +22,9 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT="$ROOT/dist"
 KEY=""
 SNAPSHOT=0
-NAMESPACE=domainpilot-release
-IDENTITY=release@domainpilot
-CONTENT=(installer ansible bin domainpilot docs README.md CHANGELOG.md release)
+NAMESPACE=ozenix-release
+IDENTITY=release@ozenix
+CONTENT=(installer ansible bin ozenix docs README.md CHANGELOG.md release)
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -37,12 +37,12 @@ while [[ $# -gt 0 ]]; do
 done
 
 cd "$ROOT"
-VERSION="$(sed -n 's/^__version__ = "\([0-9a-z.]*\)"$/\1/p' domainpilot/__init__.py)"
+VERSION="$(sed -n 's/^__version__ = "\([0-9a-z.]*\)"$/\1/p' ozenix/__init__.py)"
 [[ $VERSION =~ ^[0-9]+\.[0-9]+\.[0-9]+((rc|\.dev)[0-9]+)?$ ]] || die "bad __version__: '$VERSION'"
 
 if [[ $SNAPSHOT -eq 1 ]]; then
   REF=HEAD
-  NAME="domainpilot-$VERSION+$(git rev-parse --short=12 HEAD)"
+  NAME="ozenix-$VERSION+$(git rev-parse --short=12 HEAD)"
 else
   [[ -n $KEY ]] || die "--key is required for a release (or use --snapshot)"
   [[ -f $KEY ]] || die "no such key: $KEY"
@@ -51,7 +51,7 @@ else
   git rev-parse -q --verify "refs/tags/$REF" >/dev/null || die "tag $REF does not exist (git tag -s $REF)"
   [[ "$(git rev-parse "$REF^{commit}")" == "$(git rev-parse HEAD)" ]] || die "HEAD is not $REF"
   grep -q "^## $VERSION\b" CHANGELOG.md || die "CHANGELOG.md has no '## $VERSION' section"
-  NAME="domainpilot-$VERSION"
+  NAME="ozenix-$VERSION"
 fi
 COMMIT="$(git rev-parse "$REF^{commit}")"
 

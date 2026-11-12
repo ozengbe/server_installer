@@ -1,6 +1,6 @@
 """Phase 4 acceptance: tenant isolation, tested from inside real sandboxes.
 
-Creates three tenants on a disposable test host, runs domainpilot/isolation/
+Creates three tenants on a disposable test host, runs ozenix/isolation/
 probe.php through each tenant's own PHP-FPM (so it executes inside the real
 sandbox), and asserts every escape attempt fails. Tenants are purged afterwards.
 """
@@ -18,19 +18,19 @@ from typing import Any
 
 import pytest
 
-from domainpilot.core import proc
-from domainpilot.core.audit import AuditLog
-from domainpilot.core.config import load_host
-from domainpilot.core.errors import DPError
-from domainpilot.core.paths import Paths
-from domainpilot.core.registry import Registry, Tenant
-from domainpilot.isolation import db, fcgi
-from domainpilot.isolation.provision import Provisioner, provision_tenant
-from domainpilot.isolation.status import EXPOSURE_TARGET, exposure_score
+from ozenix.core import proc
+from ozenix.core.audit import AuditLog
+from ozenix.core.config import load_host
+from ozenix.core.errors import DPError
+from ozenix.core.paths import Paths
+from ozenix.core.registry import Registry, Tenant
+from ozenix.isolation import db, fcgi
+from ozenix.isolation.provision import Provisioner, provision_tenant
+from ozenix.isolation.status import EXPOSURE_TARGET, exposure_score
 
 pytestmark = pytest.mark.integration
 
-PROBE_SRC = Path(__file__).resolve().parents[2] / "domainpilot" / "isolation" / "probe.php"
+PROBE_SRC = Path(__file__).resolve().parents[2] / "ozenix" / "isolation" / "probe.php"
 PATHS = Paths.default()
 
 
@@ -40,7 +40,7 @@ def sh(*argv: str) -> str:
 
 @pytest.fixture(scope="module")
 def env() -> Iterator[dict[str, Any]]:
-    assert os.geteuid() == 0 and Path("/etc/domainpilot-test-vm").is_file(), "test VM only"
+    assert os.geteuid() == 0 and Path("/etc/ozenix-test-vm").is_file(), "test VM only"
     PATHS.create_runtime_dirs()
     host = load_host(PATHS.host_config_file)
     registry = Registry.open(PATHS.registry)
@@ -104,7 +104,7 @@ def test_runs_as_own_unprivileged_user(env: dict[str, Any], results: list[dict[s
         label, _, mode = r["apparmor_label"].rpartition(" ")
         assert mode == "(enforce)", r["apparmor_label"]
         members = label.split("//&")
-        assert members[0] == f"domainpilot-tenant-{t.id}", r["apparmor_label"]
+        assert members[0] == f"ozenix-tenant-{t.id}", r["apparmor_label"]
         assert set(members[1:]) <= {"unconfined"}, r["apparmor_label"]
 
 
@@ -237,7 +237,7 @@ def test_failed_provisioning_rolls_back_completely(env: dict[str, Any]) -> None:
     assert not PATHS.tenant_etc(failed.id).exists()
     assert not (PATHS.apparmor / f"tenant-{failed.id}").exists()
     assert (
-        f"domainpilot-tenant-{failed.id}"
+        f"ozenix-tenant-{failed.id}"
         not in Path("/sys/kernel/security/apparmor/profiles").read_text()
     )
     assert not db.user_exists(failed.id)

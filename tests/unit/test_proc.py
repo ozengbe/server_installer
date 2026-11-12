@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from domainpilot.core import proc
-from domainpilot.core.errors import OperationFailed, ValidationError
+from ozenix.core import proc
+from ozenix.core.errors import OperationFailed, ValidationError
 
 
 def test_runs_argv_literally_without_shell() -> None:

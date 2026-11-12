@@ -1,7 +1,10 @@
-# Managed by Ozenix. Included by site templates (Phase 5).
-# CSP and HSTS are per site (application-specific, staged rollout).
+# Managed by ozenix. Included by site templates (Phase 5).
+# HSTS is per site (only with a trusted certificate). The CSP below is a baseline
+# that cannot break normal sites (no framing by other sites, no plugins, no
+# <base> hijack); apps add their own CSP on top (browsers enforce both).
 add_header X-Content-Type-Options "nosniff" always;
 add_header Referrer-Policy "strict-origin-when-cross-origin" always;
 add_header X-Frame-Options "SAMEORIGIN" always;
 add_header Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()" always;
 add_header Cross-Origin-Opener-Policy "same-origin" always;
+add_header Content-Security-Policy "frame-ancestors 'self'; object-src 'none'; base-uri 'self'" always;

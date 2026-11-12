@@ -1,0 +1,57 @@
+# Managed by ozenix. Laravel scheduler of one site (`php artisan schedule:run`),
+# started every minute by dp-laravel-schedule@<tenant>.timer.
+[Unit]
+Description=ozenix Laravel scheduler for tenant %i
+ConditionPathExists=/etc/ozenix/tenants/%i/laravel.env
+ConditionPathExists=/srv/tenants/%i/app/artisan
+
+[Service]
+Type=oneshot
+User=%i
+Group=%i
+Slice=dptenants-%i.slice
+EnvironmentFile=/etc/ozenix/tenants/%i/laravel.env
+WorkingDirectory=/srv/tenants/%i/app
+ExecStart=/bin/sh -c 'exec "$$PHP_BIN" -d variables_order=EGPCS -d pcre.jit=0 artisan schedule:run --no-interaction'
+TimeoutStartSec=50min
+UMask=0027
+StandardOutput=append:/var/log/ozenix/tenants/%i/laravel-schedule.log
+StandardError=append:/var/log/ozenix/tenants/%i/laravel-schedule.log
+# Same sandbox as the site's PHP, with the "-exec" AppArmor profile: the scheduler starts
+# `php artisan ...` child processes for scheduled commands.
+TemporaryFileSystem=/srv/tenants:ro /etc/ozenix:ro /var/log/ozenix:ro /run/ozenix:ro /var/lib/ozenix:ro
+BindReadOnlyPaths=/srv/tenants/%i /srv/tenants/%i/app /etc/ozenix/tenants/%i
+BindPaths=/srv/tenants/%i/data /srv/tenants/%i/tmp /var/log/ozenix/tenants/%i
+BindReadOnlyPaths=-/run/ozenix/%i/cache
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateDevices=yes
+ProtectProc=invisible
+ProcSubset=pid
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+KeyringMode=private
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+SocketBindDeny=any
+RestrictSUIDSGID=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@mount @swap @reboot @raw-io @module @clock @cpu-emulation @debug @obsolete
+SystemCallErrorNumber=EPERM
+IPAddressDeny=169.254.0.0/16 fe80::/10 fd00:ec2::254/128
+
+# The site's AppArmor profile for programs: same files as PHP, and it may start
+# only PHP, sh, Python, Node.js and the site's own code.
+AppArmorProfile=ozenix-tenant-%i-exec

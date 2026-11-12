@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from domainpilot.core import fsutil
-from domainpilot.core.errors import OperationFailed, ValidationError
+from ozenix.core import fsutil
+from ozenix.core.errors import OperationFailed, ValidationError
 
 
 @pytest.fixture

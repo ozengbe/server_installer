@@ -5,7 +5,7 @@
       - ansible_facts['distribution'] == 'Ubuntu'
       - ansible_facts['distribution_version'] in dp_supported_releases
     fail_msg: >-
-      Ozenix supports Ubuntu {{ dp_supported_releases | join(' and ') }} LTS only
+      ozenix supports Ubuntu {{ dp_supported_releases | join(' and ') }} LTS only
       (found {{ ansible_facts['distribution'] }} {{ ansible_facts['distribution_version'] }}).
 
 - name: Require systemd and cgroup v2
@@ -24,12 +24,11 @@
 - name: Validate admin definitions
   ansible.builtin.assert:
     that:
-      - dp_admin_names | length > 0
       - dp_admin_names | select('match', '^[a-z][a-z0-9_-]{0,30}\Z') | list | length == dp_admin_names | length
       - dp_admin_names | unique | length == dp_admin_names | length
       - dp_admin_names | intersect(dp_admins_revoked) | length == 0
     fail_msg: >-
-      dp_admins must list at least one admin with a valid lowercase username,
+      Every entry in dp_admins needs a valid lowercase username,
       without duplicates, and none of them may also be in dp_admins_revoked.
   vars:
     dp_admin_names: "{{ dp_admins | map(attribute='name') | list }}"
@@ -47,19 +46,6 @@
   vars:
     dp_key_regex: '^(ssh-ed25519|sk-ssh-ed25519@openssh\.com|ecdsa-sha2-nistp(256|384|521)|sk-ecdsa-sha2-nistp256@openssh\.com|ssh-rsa) [A-Za-z0-9+/]+={0,3}( [^\r\n]*)?\Z'  # noqa: yaml[line-length]
 
-- name: Determine the operator account
-  ansible.builtin.set_fact:
-    dp_operator: "{{ ansible_facts['env']['SUDO_USER'] | default(ansible_user | default(''), true) }}"
-
-- name: Refuse to lock out the operator
-  ansible.builtin.assert:
-    that:
-      - dp_i_understand_lockout_risk | bool or dp_operator in (dp_admins | map(attribute='name') | list)
-    fail_msg: >-
-      You are running this as '{{ dp_operator }}', which is not in dp_admins.
-      After hardening, only dp_admins can log in via SSH. Add yourself to dp_admins
-      (or set dp_i_understand_lockout_risk=true if access is managed elsewhere).
-
 - name: Validate firewall settings
   ansible.builtin.assert:
     that:
@@ -74,7 +60,7 @@
 
 - name: Check for an unconfirmed firewall change
   ansible.builtin.stat:
-    path: /var/lib/domainpilot/firewall/pending
+    path: /var/lib/ozenix/firewall/pending
   register: dp_fw_pending
 
 - name: Refuse to continue while a firewall change is pending

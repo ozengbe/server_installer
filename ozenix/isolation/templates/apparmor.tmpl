@@ -1,0 +1,150 @@
+# Managed by ozenix: AppArmor profile for tenant ${tenant}'s services
+# (PHP-FPM and cache). Only this tenant's paths are reachable; no other program
+# may be executed.
+abi <abi/4.0>,
+include <tunables/global>
+
+profile ozenix-tenant-${tenant} flags=(attach_disconnected,mediate_deleted) {
+  include <abstractions/base>
+  include <abstractions/nameservice>
+  include <abstractions/openssl>
+  include <abstractions/ssl_certs>
+
+  # Runtimes
+  /usr/sbin/php-fpm[0-9]* mr,
+  ${cache_server} mr,
+  /usr/lib/php/** mr,
+  /usr/share/php/** r,
+  /etc/php/** r,
+  /usr/share/zoneinfo/** r,
+  /usr/share/zoneinfo-icu/** r,
+  /usr/share/icu/** r,
+  owner @{PROC}/@{pid}/** r,
+  @{PROC}/sys/kernel/random/* r,
+  @{PROC}/sys/net/core/somaxconn r,
+  @{PROC}/sys/vm/overcommit_memory r,
+  @{PROC}/sys/kernel/mm/transparent_hugepage/enabled r,
+  /sys/kernel/mm/transparent_hugepage/** r,
+  /sys/devices/system/cpu/** r,
+  /sys/fs/cgroup/** r,
+
+  # This tenant only
+  ${etc_dir}/ r,
+  ${etc_dir}/** r,
+  ${root}/ r,
+  ${root}/app/ r,
+  ${root}/app/** r,
+  ${root}/data/ rw,
+  ${root}/data/** rwlk,
+  ${root}/tmp/ rw,
+  ${root}/tmp/** rwlk,
+  /tmp/ rw,
+  /tmp/** rwlk,
+  /var/tmp/ rw,
+  /var/tmp/** rwlk,
+  ${run_dir}/ r,
+  ${run_dir}/** rwlk,
+  ${log_dir}/ r,
+  ${log_dir}/** rwl,
+  ${cache_data}/ rw,
+  ${cache_data}/** rwlk,
+
+  # Shared services, by socket only
+  /run/mysqld/mysqld.sock rw,
+  /run/systemd/notify w,
+
+  network inet stream,
+  network inet6 stream,
+  network inet dgram,
+  network inet6 dgram,
+  network unix,
+  network netlink raw,
+  unix,
+
+  # Own processes only. On Ubuntu 26.04 systemd attaches the profile as a stack,
+  # so the processes are labelled "<profile>//&unconfined".
+  signal (send, receive) peer=ozenix-tenant-${tenant},
+  signal (send, receive) peer="ozenix-tenant-${tenant}//&unconfined",
+  signal (receive) peer=unconfined,
+}
+
+# The site's other programs: Laravel scheduler/queue, Node.js/Python app. Same
+# file and network rules as PHP, but these may start a small, fixed set of programs.
+profile ozenix-tenant-${tenant}-exec flags=(attach_disconnected,mediate_deleted) {
+  include <abstractions/base>
+  include <abstractions/nameservice>
+  include <abstractions/openssl>
+  include <abstractions/ssl_certs>
+
+  # Programs it may run (they stay in this profile: ix)
+  /usr/bin/php[0-9]* mrix,
+  /usr/bin/dash mrix,
+  /usr/bin/bash mrix,
+  /usr/bin/env mrix,
+  /usr/bin/python3* mrix,
+  /opt/ozenix/node/** mrix,
+  ${root}/app/** mrix,
+  /usr/lib/python3/** mr,
+  /usr/lib/python3*/** mr,
+  /usr/local/lib/python3*/** mr,
+  /etc/python3*/** r,
+  /usr/share/** r,
+  # Runtimes
+  /usr/sbin/php-fpm[0-9]* mr,
+  ${cache_server} mr,
+  /usr/lib/php/** mr,
+  /usr/share/php/** r,
+  /etc/php/** r,
+  /usr/share/zoneinfo/** r,
+  /usr/share/zoneinfo-icu/** r,
+  /usr/share/icu/** r,
+  owner @{PROC}/@{pid}/** r,
+  @{PROC}/sys/kernel/random/* r,
+  @{PROC}/sys/net/core/somaxconn r,
+  @{PROC}/sys/vm/overcommit_memory r,
+  @{PROC}/sys/kernel/mm/transparent_hugepage/enabled r,
+  /sys/kernel/mm/transparent_hugepage/** r,
+  /sys/devices/system/cpu/** r,
+  /sys/fs/cgroup/** r,
+
+  # This tenant only
+  ${etc_dir}/ r,
+  ${etc_dir}/** r,
+  ${root}/ r,
+  ${root}/app/ r,
+  ${root}/app/** r,
+  ${root}/data/ rw,
+  ${root}/data/** rwlk,
+  ${root}/tmp/ rw,
+  ${root}/tmp/** rwlk,
+  /tmp/ rw,
+  /tmp/** rwlk,
+  /var/tmp/ rw,
+  /var/tmp/** rwlk,
+  ${run_dir}/ r,
+  ${run_dir}/** rwlk,
+  ${log_dir}/ r,
+  ${log_dir}/** rwl,
+  ${cache_data}/ rw,
+  ${cache_data}/** rwlk,
+
+  # Shared services, by socket only
+  /run/mysqld/mysqld.sock rw,
+  /run/systemd/notify w,
+
+  network inet stream,
+  network inet6 stream,
+  network inet dgram,
+  network inet6 dgram,
+  network unix,
+  network netlink raw,
+  unix,
+
+  # Own processes only. On Ubuntu 26.04 systemd attaches the profile as a stack,
+  # so the processes are labelled "<profile>//&unconfined".
+  signal (send, receive) peer=ozenix-tenant-${tenant}-exec,
+  signal (send, receive) peer="ozenix-tenant-${tenant}-exec//&unconfined",
+  signal (send, receive) peer=ozenix-tenant-${tenant},
+  signal (send, receive) peer="ozenix-tenant-${tenant}//&unconfined",
+  signal (receive) peer=unconfined,
+}

@@ -1,0 +1,11 @@
+# Managed by ozenix for tenant ${tenant}: its ${app_runtime} app. The sandbox
+# itself is in /etc/systemd/system/dp-app@.service (installed by the installer).
+[Service]
+Slice=${slice}
+Environment=PORT=${app_port} HOST=127.0.0.1 NODE_ENV=production PYTHONUNBUFFERED=1
+Environment=PATH=${app_path}
+Environment=HOME=${root}/tmp npm_config_cache=${root}/tmp/.npm
+EnvironmentFile=-${etc_dir}/secrets/db.env
+SocketBindAllow=tcp:${app_port}
+ExecStart=
+ExecStart=/bin/sh -c ${app_exec}

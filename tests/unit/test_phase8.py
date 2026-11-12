@@ -17,24 +17,24 @@ from typing import Any
 
 import pytest
 
-from domainpilot.backup import config as bconf
-from domainpilot.backup.manager import BackupManager
-from domainpilot.backup.restic import Restic, Snapshot, validate_snapshot_id
-from domainpilot.cli import backup_handlers, monitor_handlers
-from domainpilot.core import proc
-from domainpilot.core.audit import AuditLog
-from domainpilot.core.errors import (
+from ozenix.backup import config as bconf
+from ozenix.backup.manager import BackupManager
+from ozenix.backup.restic import Restic, Snapshot, validate_snapshot_id
+from ozenix.cli import backup_handlers, monitor_handlers
+from ozenix.core import proc
+from ozenix.core.audit import AuditLog
+from ozenix.core.errors import (
     OperationFailed,
     PreconditionFailed,
     UsageError,
     ValidationError,
 )
-from domainpilot.core.secrets import SecretStore
-from domainpilot.health import Report
-from domainpilot.monitor import alerts as al
-from domainpilot.monitor import monitor as mon
-from domainpilot.sftp import SftpManager, parse_public_key
-from domainpilot.sites.lifecycle import CreateRequest
+from ozenix.core.secrets import SecretStore
+from ozenix.health import Report
+from ozenix.monitor import alerts as al
+from ozenix.monitor import monitor as mon
+from ozenix.sftp import SftpManager, parse_public_key
+from ozenix.sites.lifecycle import CreateRequest
 
 ED25519 = (
     "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGl0aXNhdGVzdGtleWZvcmRvbWFpbnBpbG90MDAw alice@laptop"
@@ -229,7 +229,7 @@ def test_secret_store(tmp_path: Path) -> None:
     [
         "s3:https://s3.us-west-004.backblazeb2.com/my-bucket/server1",
         "s3:https://s3.eu-central-1.wasabisys.com:443/bkt",
-        "/var/backups/domainpilot",
+        "/var/backups/ozenix",
     ],
 )
 def test_valid_repositories(repo: str) -> None:
@@ -576,7 +576,7 @@ def test_sftp_accounts(tmp_path: Path) -> None:
     created = sftp.create("t0001", ED25519 + "\n", "alice")
     assert created["username"] == "t0001-deploy" and created["connect"].endswith("@srv.example.net")
     line = (keys / "t0001-deploy").read_text()
-    assert line.startswith("restrict ssh-ed25519 ") and line.rstrip().endswith("dp:alice")
+    assert line.startswith("restrict,pty ssh-ed25519 ") and line.rstrip().endswith("dp:alice")
     assert "alice@laptop" not in line  # the user's comment is not trusted/stored
     assert ["/usr/bin/gpasswd", "-a", "t0001-deploy", "dp-sftp"] in calls
     other = ED25519.replace("AAAAIGl0", "AAAAIGx4")
@@ -654,7 +654,7 @@ def test_alert_urls_and_payloads() -> None:
     assert "content" in json.loads(al.payload("discord", alert)[0])
     assert "text" in json.loads(al.payload("telegram", alert)[0])
     generic = json.loads(al.payload("webhook", alert)[0])
-    assert generic["source"] == "domainpilot" and generic["severity"] == "critical"
+    assert generic["source"] == "ozenix" and generic["severity"] == "critical"
     for state in ("reminder", "event", "test"):
         assert al.Alert("k", "warn", "m", state, "h").title
 
@@ -824,9 +824,9 @@ def test_monitor_alerts_only_on_change(
 def _ctx(system: dict[str, Any], domain: str | None = None, *, tty: bool = False) -> Any:
     from conftest import FakeProbe
 
-    from domainpilot.cli.context import Context
-    from domainpilot.core.config import Config
-    from domainpilot.core.output import Output
+    from ozenix.cli.context import Context
+    from ozenix.core.config import Config
+    from ozenix.core.output import Output
 
     class Out(io.StringIO):
         def isatty(self) -> bool:
@@ -983,7 +983,7 @@ def test_sftp_handlers(
     with pytest.raises(UsageError):
         monitor_handlers.sftp_create(ctx, _ns(key=None, key_stdin=False, name="a"))
     made = monitor_handlers.sftp_create(ctx, _ns(key=str(key), key_stdin=False, name="alice"))
-    assert "Connect: sftp t0001-deploy@" in made.text[1]
+    assert "Connect: ssh t0001-deploy@" in made.text[1]
     monkeypatch.setattr("sys.stdin", io.StringIO(ED25519.replace("AAAAIGl0", "AAAAIGx4")))
     monitor_handlers.sftp_create(ctx, _ns(key=None, key_stdin=True, name="bob"))
     listed = monitor_handlers.sftp_list(ctx, _ns())

@@ -1,0 +1,91 @@
+---
+# One Node.js major (node_major), e.g. "24" -> /opt/ozenix/node/24 -> v24.x.y
+- name: "Release and architecture (Node.js {{ node_major }})"
+  ansible.builtin.set_fact:
+    runtimes_node_version: "{{ runtimes_node_releases[node_major] }}"
+    runtimes_node_arch: "{{ {'x86_64': 'x64', 'aarch64': 'arm64'}[ansible_facts['architecture']] }}"
+
+- name: "Is this release installed? (Node.js {{ node_major }})"
+  ansible.builtin.stat:
+    path: "/opt/ozenix/node/{{ runtimes_node_version }}/bin/node"
+  register: runtimes_node_present
+
+- name: "Download and verify the release (Node.js {{ node_major }})"
+  when: not runtimes_node_present.stat.exists
+  vars:
+    runtimes_node_tarball: "node-{{ runtimes_node_version }}-linux-{{ runtimes_node_arch }}.tar.xz"
+    runtimes_node_base: "https://nodejs.org/dist/{{ runtimes_node_version }}"
+    runtimes_node_cache: "/var/cache/ozenix/node"
+  block:
+    - name: "Signed checksum list (Node.js {{ node_major }})"
+      ansible.builtin.get_url:
+        url: "{{ runtimes_node_base }}/SHASUMS256.txt.asc"
+        dest: "{{ runtimes_node_cache }}/SHASUMS256-{{ runtimes_node_version }}.txt.asc"
+        mode: "0644"
+        force: true
+        timeout: 60
+
+    # gpgv prints only content whose signature verifies with the vendored keys.
+    - name: "Verify the signature (Node.js {{ node_major }})"
+      ansible.builtin.command: >-
+        /usr/bin/gpgv --keyring /usr/share/keyrings/nodejs-release-keys.gpg --output -
+        {{ runtimes_node_cache }}/SHASUMS256-{{ runtimes_node_version }}.txt.asc
+      register: runtimes_node_sums
+      changed_when: false
+
+    - name: "Expected checksum (Node.js {{ node_major }})"
+      ansible.builtin.set_fact:
+        runtimes_node_sha256: >-
+          {{ (runtimes_node_sums.stdout_lines
+              | select('match', '^[0-9a-f]{64}  ' ~ (runtimes_node_tarball | regex_escape) ~ '$')
+              | first).split()[0] }}
+
+    - name: "Download the release (Node.js {{ node_major }})"
+      ansible.builtin.get_url:
+        url: "{{ runtimes_node_base }}/{{ runtimes_node_tarball }}"
+        dest: "{{ runtimes_node_cache }}/{{ runtimes_node_tarball }}"
+        checksum: "sha256:{{ runtimes_node_sha256 }}"
+        mode: "0644"
+        timeout: 300
+
+    - name: "Release directory (Node.js {{ node_major }})"
+      ansible.builtin.file:
+        path: "/opt/ozenix/node/{{ runtimes_node_version }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: "Unpack (Node.js {{ node_major }})"
+      ansible.builtin.unarchive:
+        src: "{{ runtimes_node_cache }}/{{ runtimes_node_tarball }}"
+        dest: "/opt/ozenix/node/{{ runtimes_node_version }}"
+        remote_src: true
+        extra_opts: [--strip-components=1, --no-same-owner]
+
+    - name: "Remove the download (Node.js {{ node_major }})"
+      ansible.builtin.file:
+        path: "{{ runtimes_node_cache }}/{{ runtimes_node_tarball }}"
+        state: absent
+
+- name: "Make this release the current one (Node.js {{ node_major }})"
+  ansible.builtin.file:
+    src: "{{ runtimes_node_version }}"
+    dest: "/opt/ozenix/node/{{ node_major }}"
+    state: link
+    force: true
+
+- name: "Older releases (Node.js {{ node_major }})"
+  ansible.builtin.find:
+    paths: /opt/ozenix/node
+    patterns: "v{{ node_major }}.*"
+    file_type: directory
+  register: runtimes_node_old
+
+- name: "Remove older releases (Node.js {{ node_major }})"
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: absent
+  loop: "{{ runtimes_node_old.files | rejectattr('path', 'search', '/' ~ runtimes_node_version ~ '$') | list }}"
+  loop_control:
+    label: "{{ item.path | basename }}"

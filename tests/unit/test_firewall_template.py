@@ -15,9 +15,7 @@ import pytest
 
 jinja2 = pytest.importorskip("jinja2")
 
-TEMPLATE = (
-    Path(__file__).resolve().parents[2] / "ansible/roles/firewall/templates/domainpilot.nft.j2"
-)
+TEMPLATE = Path(__file__).resolve().parents[2] / "ansible/roles/firewall/templates/ozenix.nft.j2"
 
 
 def render(**overrides: Any) -> str:

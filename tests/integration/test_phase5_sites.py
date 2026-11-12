@@ -81,7 +81,7 @@ def purge(domain: str) -> None:
 
 @pytest.fixture(scope="module", autouse=True)
 def clean() -> Iterator[None]:
-    assert os.geteuid() == 0 and Path("/etc/domainpilot-test-vm").is_file(), "test VM only"
+    assert os.geteuid() == 0 and Path("/etc/ozenix-test-vm").is_file(), "test VM only"
     for d in (PHP_SITE, STATIC_SITE, CRASH_SITE):
         purge(d)
     yield
@@ -235,7 +235,7 @@ def test_delete_requires_confirmation_then_archives_then_purges(php_site: dict[s
 def _assert_no_trace(domain: str) -> None:
     listing = site_json("list")["sites"]
     assert all(s["domain"] != domain for s in listing)
-    assert not Path(f"/etc/nginx/domainpilot/sites/{domain}.conf").exists()
+    assert not Path(f"/etc/nginx/ozenix/sites/{domain}.conf").exists()
     users = {p.pw_name for p in pwd.getpwall()}
     tenants = {u for u in users if u.startswith("t") and u[1:5].isdigit()}
     live = subprocess.run(

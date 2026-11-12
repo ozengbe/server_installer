@@ -7,16 +7,16 @@ from pathlib import Path
 import pytest
 from conftest import FakeProbe, RunCli
 
-from domainpilot import __version__
-from domainpilot.cli import commands
-from domainpilot.cli import main as cli_main
-from domainpilot.cli.commands import CommandSpec
-from domainpilot.cli.context import CommandResult, Context
-from domainpilot.core.errors import ConfirmationRequired, ExitCode, UsageError
-from domainpilot.core.locks import FileLock
-from domainpilot.core.output import Output
-from domainpilot.core.paths import Paths
-from domainpilot.core.registry import Registry
+from ozenix import __version__
+from ozenix.cli import commands
+from ozenix.cli import main as cli_main
+from ozenix.cli.commands import CommandSpec
+from ozenix.cli.context import CommandResult, Context
+from ozenix.core.errors import ConfirmationRequired, ExitCode, UsageError
+from ozenix.core.locks import FileLock
+from ozenix.core.output import Output
+from ozenix.core.paths import Paths
+from ozenix.core.registry import Registry
 
 
 def seed_site(paths: Paths, domain: str = "example.com") -> None:
@@ -40,7 +40,7 @@ def test_no_args_prints_help_with_usage_code(run_cli: RunCli) -> None:
 @pytest.mark.parametrize("argv", [["help"], ["--help"], ["-h"]])
 def test_help(run_cli: RunCli, argv: list[str]) -> None:
     r = run_cli(*argv)
-    assert r.code == 0 and "Ozenix site manager" in r.out
+    assert r.code == 0 and "ozenix site manager" in r.out
 
 
 def test_version(run_cli: RunCli) -> None:
@@ -228,7 +228,7 @@ def fake_commands(monkeypatch: pytest.MonkeyPatch, paths: Paths) -> list[str]:
         return CommandResult({"zapped": True}, ["zapped"])
 
     def touch(ctx: Context, _ns: argparse.Namespace) -> CommandResult:
-        with pytest.raises(Exception, match="another Ozenix operation"):
+        with pytest.raises(Exception, match="another ozenix operation"):
             FileLock(ctx.paths.global_lock, timeout=0.1).acquire()
         calls.append("touch")
         return CommandResult({})
@@ -314,5 +314,5 @@ def test_every_spec_is_well_formed() -> None:
 def test_package_entry_point_importable(tmp_path: Path) -> None:
     import importlib
 
-    module = importlib.import_module("domainpilot.cli.main")
+    module = importlib.import_module("ozenix.cli.main")
     assert callable(module.main)

@@ -12,21 +12,21 @@
   loop:
     # 0711: traversable (nginx, own tenant) but not listable.
     - { path: /srv/tenants, mode: "0711" }
-    - { path: /run/domainpilot, mode: "0711" }
-    - { path: /etc/domainpilot/tenants, mode: "0700" }
-    - { path: /var/log/domainpilot/tenants, mode: "0711" }
-    - { path: /var/lib/domainpilot/cache, mode: "0711" }
-    - { path: /etc/apparmor.d/domainpilot, mode: "0755" }
+    - { path: /run/ozenix, mode: "0711" }
+    - { path: /etc/ozenix/tenants, mode: "0700" }
+    - { path: /var/log/ozenix/tenants, mode: "0711" }
+    - { path: /var/lib/ozenix/cache, mode: "0711" }
+    - { path: /etc/apparmor.d/ozenix, mode: "0755" }
 
-- name: Keep /run/domainpilot across reboots with the right mode
+- name: Keep /run/ozenix across reboots with the right mode
   ansible.builtin.copy:
-    dest: /etc/tmpfiles.d/domainpilot.conf
+    dest: /etc/tmpfiles.d/ozenix.conf
     owner: root
     group: root
     mode: "0644"
     content: |
-      # Managed by Ozenix
-      d /run/domainpilot 0711 root root -
+      # Managed by ozenix
+      d /run/ozenix 0711 root root -
 
 - name: Parent slice for all tenants
   ansible.builtin.copy:
@@ -35,9 +35,9 @@
     group: root
     mode: "0644"
     content: |
-      # Managed by Ozenix: all tenant workloads live below this slice.
+      # Managed by ozenix: all tenant workloads live below this slice.
       [Unit]
-      Description=Ozenix tenants
+      Description=ozenix tenants
       Before=slices.target
 
       [Slice]
@@ -53,13 +53,19 @@
     owner: root
     group: root
     mode: "0644"
-  loop: [dp-php@.service, dp-cache@.service]
+  loop:
+    - dp-php@.service
+    - dp-cache@.service
+    - dp-app@.service
+    - dp-laravel-schedule@.service
+    - dp-laravel-schedule@.timer
+    - dp-laravel-queue@.service
   notify: Reload systemd
 
 - name: Host facts for the site CLI
   ansible.builtin.template:
     src: host.toml.j2
-    dest: /etc/domainpilot/host.toml
+    dest: /etc/ozenix/host.toml
     owner: root
     group: root
     mode: "0644"

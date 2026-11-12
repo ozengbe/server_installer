@@ -1,6 +1,6 @@
-# Managed by Ozenix
+# Managed by ozenix
 [Unit]
-Description=Temporary Directory /tmp (Ozenix hardened)
+Description=Temporary Directory /tmp (ozenix hardened)
 Documentation=https://systemd.io/TEMPORARY_DIRECTORIES
 ConditionPathIsSymbolicLink=!/tmp
 DefaultDependencies=no

@@ -1,0 +1,69 @@
+# Managed by ozenix. Sandbox for one site's Node.js or Python app.
+# Per-site settings (start command, runtime, port) come from the drop-in written by `site`:
+#   /etc/systemd/system/dp-app@<tenant>.service.d/10-tenant.conf
+# The app listens on 127.0.0.1:$PORT (10000 + site number); nginx proxies to it.
+[Unit]
+Description=ozenix app (Node.js/Python) for tenant %i
+After=network.target mariadb.service dp-cache@%i.service
+ConditionPathExists=/etc/systemd/system/dp-app@%i.service.d/10-tenant.conf
+StartLimitIntervalSec=300
+StartLimitBurst=5
+OnFailure=dp-alert@%n.service
+
+[Service]
+Type=simple
+User=%i
+Group=%i
+ExecStart=/bin/false
+WorkingDirectory=/srv/tenants/%i/app
+Restart=on-failure
+RestartSec=3
+UMask=0027
+StandardOutput=append:/var/log/ozenix/tenants/%i/app.log
+StandardError=append:/var/log/ozenix/tenants/%i/app.log
+
+# Only this site's paths exist inside the namespace. Code is read-only for the
+# app (like PHP): it writes only to data/ and tmp/.
+TemporaryFileSystem=/srv/tenants:ro /etc/ozenix:ro /var/log/ozenix:ro /run/ozenix:ro /var/lib/ozenix:ro
+BindReadOnlyPaths=/srv/tenants/%i /srv/tenants/%i/app
+BindPaths=/srv/tenants/%i/data /srv/tenants/%i/tmp /var/log/ozenix/tenants/%i
+BindReadOnlyPaths=-/run/ozenix/%i/cache
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateDevices=yes
+ProtectProc=invisible
+ProcSubset=pid
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+KeyringMode=private
+RemoveIPC=yes
+
+NoNewPrivileges=yes
+# Only to bind its own port: 10000-19999 are reserved (net.ipv4.ip_unprivileged_port_start).
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+SocketBindDeny=any
+RestrictSUIDSGID=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+LockPersonality=yes
+# Node.js (V8) and Python JITs need writable+executable memory.
+MemoryDenyWriteExecute=no
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@mount @swap @reboot @raw-io @module @clock @cpu-emulation @debug @obsolete
+SystemCallErrorNumber=EPERM
+IPAddressDeny=169.254.0.0/16 fe80::/10 fd00:ec2::254/128
+
+# The site's AppArmor profile for programs: same files as PHP, and it may start
+# only PHP, sh, Python, Node.js and the site's own code.
+AppArmorProfile=ozenix-tenant-%i-exec
+
+[Install]
+WantedBy=multi-user.target

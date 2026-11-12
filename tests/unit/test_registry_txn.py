@@ -6,10 +6,10 @@ from pathlib import Path
 
 import pytest
 
-from domainpilot.core.audit import AuditLog
-from domainpilot.core.errors import OperationFailed, PreconditionFailed, UsageError, ValidationError
-from domainpilot.core.registry import UID_BASE, Registry
-from domainpilot.core.txn import Step, Transaction
+from ozenix.core.audit import AuditLog
+from ozenix.core.errors import OperationFailed, PreconditionFailed, UsageError, ValidationError
+from ozenix.core.registry import UID_BASE, Registry
+from ozenix.core.txn import Step, Transaction
 
 
 @pytest.fixture
@@ -29,10 +29,10 @@ def audit_log(tmp_path: Path) -> AuditLog:
 
 def test_registry_created_private_and_migrated(tmp_path: Path, registry: Registry) -> None:
     assert (tmp_path / "registry.sqlite3").stat().st_mode & 0o777 == 0o600
-    assert registry.schema_version() == 2
+    assert registry.schema_version() == 3
     registry.close()
     again = Registry.open(tmp_path / "registry.sqlite3")
-    assert again is not None and again.schema_version() == 2
+    assert again is not None and again.schema_version() == 3
 
 
 def test_registry_open_without_create(tmp_path: Path) -> None:
@@ -233,3 +233,35 @@ def test_txn_guards(registry: Registry, audit_log: AuditLog) -> None:
 def _op_ids(registry: Registry) -> list[str]:
     rows = registry._conn.execute("SELECT id FROM operations").fetchall()
     return [r[0] for r in rows]
+
+
+def test_migration_3_keeps_sites_and_allows_app_types(tmp_path: Path) -> None:
+    """A registry created by an older ozenix (schema 2) migrates in place."""
+    import sqlite3
+
+    from ozenix.core import registry as reg
+
+    path = tmp_path / "old.sqlite3"
+    conn = sqlite3.connect(path)
+    for script in reg._MIGRATIONS[:2]:
+        conn.executescript(script)
+    conn.execute("PRAGMA user_version = 2")
+    conn.execute(
+        "INSERT INTO tenants (id, seq, uid, status, tier, created_at, updated_at) "
+        "VALUES ('t0001', 1, 20001, 'active', 's', 'x', 'x')"
+    )
+    conn.execute(
+        "INSERT INTO sites (domain, tenant_id, is_primary, site_type, created_at) "
+        "VALUES ('old.example.com', 't0001', 1, 'php', 'x')"
+    )
+    conn.commit()
+    conn.close()
+    migrated = Registry.open(path)
+    assert migrated is not None and migrated.schema_version() == 3
+    assert migrated.get_site("old.example.com") is not None
+    t = migrated.allocate_tenant()
+    migrated.add_site(
+        "node.example.com", t.id, site_type="nodejs", php_version=None, is_primary=True
+    )
+    site = migrated.get_site("node.example.com")
+    assert site is not None and site.site_type == "nodejs"

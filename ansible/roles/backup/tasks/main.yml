@@ -10,7 +10,7 @@
 
 - name: Backup state directory (root only)
   ansible.builtin.file:
-    path: /var/lib/domainpilot/backup
+    path: /var/lib/ozenix/backup
     state: directory
     owner: root
     group: root

@@ -1,9 +1,9 @@
-# Managed by Ozenix (role backup). Weekly proof that backups work: a
+# Managed by ozenix (role backup). Weekly proof that backups work: a
 # repository integrity check (2% of the data re-read) and a restore drill that
 # restores every site's newest backup into staging and checks it is complete.
 [Unit]
-Description=Ozenix backup verification and restore drill
-ConditionPathExists=/etc/domainpilot/backup.json
+Description=ozenix backup verification and restore drill
+ConditionPathExists=/etc/ozenix/backup.json
 After=network-online.target dp-backup.service
 Wants=network-online.target
 

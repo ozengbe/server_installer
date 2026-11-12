@@ -1,0 +1,15 @@
+# Managed by ozenix (role ssh). Local changes will be overwritten.
+# Included first by sshd_config; the first value obtained wins.
+#
+# The server's own login (root, your admin accounts, passwords or keys) is left
+# exactly as Ubuntu/your provider configured it. ozenix only adds:
+#  * a root-owned key location for site users (they cannot add keys themselves);
+#  * the rules for site users at the end of sshd_config (Match Group dp-sftp).
+AuthorizedKeysFile .ssh/authorized_keys .ssh/authorized_keys2 /etc/ssh/authorized_keys.d/%u
+LogLevel VERBOSE
+
+# Modern encryption only (does not change who may log in, only which very old
+# SSH clients can still connect). Hybrid post-quantum key exchange first.
+KexAlgorithms {{ dp_ssh_kex }}
+Ciphers chacha20-poly1305@openssh.com,aes256-gcm@openssh.com,aes128-gcm@openssh.com
+MACs hmac-sha2-512-etm@openssh.com,hmac-sha2-256-etm@openssh.com

@@ -23,7 +23,7 @@ import pytest
 BASE = os.environ.get("DP_TEST_CF_BASE", "")
 NAME = f"p6b.{BASE}"
 SITE = "/usr/local/bin/site"
-CONFIG = Path("/etc/domainpilot/domainpilot.toml")
+CONFIG = Path("/etc/ozenix/ozenix.toml")
 
 pytestmark = [
     pytest.mark.integration,
@@ -44,10 +44,10 @@ def site_json(*args: str) -> dict[str, Any]:
 
 
 def zone_snapshot() -> list[tuple[str, str, str, bool, str]]:
-    """Every record in the zone, read with Ozenix's own client and token."""
-    sys.path.insert(0, "/usr/lib/domainpilot/current")
-    from domainpilot.cloudflare.creds import CredentialStore
-    from domainpilot.cloudflare.manager import CloudflareManager
+    """Every record in the zone, read with ozenix's own client and token."""
+    sys.path.insert(0, "/usr/lib/ozenix/current")
+    from ozenix.cloudflare.creds import CredentialStore
+    from ozenix.cloudflare.manager import CloudflareManager
 
     mgr = CloudflareManager(CredentialStore())
     ref = mgr.zone_for(NAME)
@@ -60,14 +60,14 @@ def zone_snapshot() -> list[tuple[str, str, str, bool, str]]:
 
 @pytest.fixture(scope="module")
 def created() -> Iterator[dict[str, Any]]:
-    assert Path("/etc/domainpilot-test-vm").is_file(), "test host only"
+    assert Path("/etc/ozenix-test-vm").is_file(), "test host only"
     backup = CONFIG.read_bytes() if CONFIG.exists() else None
     CONFIG.write_text("[ssl]\nstaging = true\nautossl = true\n")
     site(NAME, "delete", "--purge", "--confirm", NAME)
     site(NAME, "repair")
     before = [r for r in zone_snapshot() if not r[1].endswith(BASE)]
     try:
-        result = site_json(NAME, "create")
+        result = site_json(NAME, "create", "--cloudflare-dns")
         result["_before"] = before
         yield result
     finally:
@@ -88,7 +88,7 @@ def test_create_adds_tagged_proxied_records(created: dict[str, Any]) -> None:
     ours = [r for r in zone_snapshot() if r[1] == NAME]
     assert {r[0] for r in ours} >= {"A"}
     for rtype, _name, _content, proxied, comment in ours:
-        assert proxied and comment == f"domainpilot:{created['tenant']}", (rtype, comment)
+        assert proxied and comment == f"ozenix:{created['tenant']}", (rtype, comment)
 
 
 def test_certificate_issued_via_dns01(created: dict[str, Any]) -> None:
@@ -96,7 +96,7 @@ def test_certificate_issued_via_dns01(created: dict[str, Any]) -> None:
     st = site_json(NAME, "ssl", "status")
     assert st["challenge"] == "dns-01 (Cloudflare)" and st["certificate"]["staging"]
     assert NAME in st["certificate"]["names"]
-    assert not list(Path("/run/domainpilot/cloudflare").glob("*.ini"))  # token not left in RAM
+    assert not list(Path("/run/ozenix/cloudflare").glob("*.ini"))  # token not left in RAM
 
 
 def test_origin_serves_https(created: dict[str, Any]) -> None:

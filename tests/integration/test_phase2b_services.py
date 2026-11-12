@@ -136,7 +136,7 @@ def test_shared_services_masked(unit: str) -> None:
 
 
 def test_php_hardening() -> None:
-    ini = Path(f"/etc/php/{PHP}/fpm/conf.d/99-domainpilot.ini").read_text(encoding="utf-8")
+    ini = Path(f"/etc/php/{PHP}/fpm/conf.d/99-ozenix.ini").read_text(encoding="utf-8")
     for needle in ("expose_php = Off", "allow_url_include = Off", "cgi.fix_pathinfo = 0"):
         assert needle in ini
     run(f"/usr/sbin/php-fpm{PHP}", "-t")
@@ -175,7 +175,7 @@ def test_fail2ban_jail_running(jail: str) -> None:
 
 
 def test_fail2ban_uses_own_nft_table_not_ours() -> None:
-    dump = run("/usr/sbin/nft", "list", "table", "inet", "domainpilot").stdout
+    dump = run("/usr/sbin/nft", "list", "table", "inet", "ozenix").stdout
     assert "f2b" not in dump
 
 

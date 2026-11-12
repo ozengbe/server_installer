@@ -8,24 +8,24 @@ from typing import Any
 
 import pytest
 
-from domainpilot.cli import site_handlers
-from domainpilot.cli.context import Context
-from domainpilot.core import fsutil, proc
-from domainpilot.core.config import Config, HostFacts
-from domainpilot.core.errors import (
+from ozenix.cli import site_handlers
+from ozenix.cli.context import Context
+from ozenix.core import fsutil, proc
+from ozenix.core.config import Config, HostFacts
+from ozenix.core.errors import (
     NotImplementedYet,
     OperationFailed,
     PreconditionFailed,
     UsageError,
     ValidationError,
 )
-from domainpilot.core.output import Output
-from domainpilot.core.paths import Paths
-from domainpilot.core.registry import Registry
-from domainpilot.core.sysinfo import SystemProbe
-from domainpilot.isolation import db as db_module
-from domainpilot.sites.lifecycle import CreateRequest
-from domainpilot.web.nginx import Nginx, Upstream, parse_upstream
+from ozenix.core.output import Output
+from ozenix.core.paths import Paths
+from ozenix.core.registry import Registry
+from ozenix.core.sysinfo import SystemProbe
+from ozenix.isolation import db as db_module
+from ozenix.sites.lifecycle import CreateRequest
+from ozenix.web.nginx import Nginx, Upstream, parse_upstream
 
 HOST = HostFacts(release="26.04", default_php_version="8.5", php_versions=("8.5",))
 
@@ -258,7 +258,7 @@ def test_alias_and_unknown_are_rejected(system: dict[str, Any]) -> None:
     mgr.create(CreateRequest("example.com", aliases=["www.example.com"]))
     with pytest.raises(PreconditionFailed, match="alias of example.com"):
         mgr.set_enabled("www.example.com", False)
-    with pytest.raises(PreconditionFailed, match="not an Ozenix site"):
+    with pytest.raises(PreconditionFailed, match="not an ozenix site"):
         mgr.delete("nope.example.com", purge=False)
 
 

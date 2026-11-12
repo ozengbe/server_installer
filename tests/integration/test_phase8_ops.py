@@ -1,6 +1,6 @@
 """Phase 8 acceptance: backups + restore drill, chrooted SFTP, bounded recovery + alerts.
 
-Runs only on a disposable test host (/etc/domainpilot-test-vm). Backups go to a
+Runs only on a disposable test host (/etc/ozenix-test-vm). Backups go to a
 local restic repository (stand-in for the S3 bucket); any backup/alert
 configuration that existed before is put back afterwards.
 """
@@ -26,8 +26,8 @@ pytestmark = pytest.mark.integration
 
 SITE = "/usr/local/bin/site"
 DOMAIN = "p8.example.com"
-REPO = Path("/var/backups/domainpilot-p8test")
-ETC = Path("/etc/domainpilot")
+REPO = Path("/var/backups/ozenix-p8test")
+ETC = Path("/etc/ozenix")
 SAVED = [ETC / "backup.json", ETC / "alerts.json"]
 SECRET_DIRS = [ETC / "secrets" / "backup", ETC / "secrets" / "alerts"]
 
@@ -68,7 +68,7 @@ def http_get(path: str = "/") -> tuple[int, str]:
 
 @pytest.fixture(scope="module", autouse=True)
 def environment(tmp_path_factory: pytest.TempPathFactory) -> Iterator[dict[str, Any]]:
-    assert Path("/etc/domainpilot-test-vm").is_file(), "test host only"
+    assert Path("/etc/ozenix-test-vm").is_file(), "test host only"
     keep = tmp_path_factory.mktemp("saved")
     for path in SAVED:
         if path.exists():
@@ -92,7 +92,7 @@ def environment(tmp_path_factory: pytest.TempPathFactory) -> Iterator[dict[str, 
         shutil.rmtree(directory, ignore_errors=True)
         if (keep / directory.name).exists():
             shutil.copytree(keep / directory.name, directory)
-    Path("/var/lib/domainpilot/backup/state.json").unlink(missing_ok=True)
+    Path("/var/lib/ozenix/backup/state.json").unlink(missing_ok=True)
 
 
 def write_app(tenant: str, name: str, content: str) -> Path:
@@ -194,7 +194,24 @@ def ssh(env: dict[str, Any], *args: str, timeout: float = 30) -> subprocess.Comp
     )  # fmt: skip
 
 
-def test_sftp_chroot_upload_and_escapes(environment: dict[str, Any]) -> None:
+def run_as_site_user(env: dict[str, Any], command: str) -> subprocess.CompletedProcess[str]:
+    return sh(
+        "/usr/bin/ssh",
+        "-i", str(env["work"] / "key"),
+        "-o", "BatchMode=yes",
+        "-o", "IdentitiesOnly=yes",
+        "-o", "StrictHostKeyChecking=no",
+        "-o", "UserKnownHostsFile=/dev/null",
+        f"{env['tenant']}-deploy@127.0.0.1",
+        command,
+        timeout=30,
+        check=False,
+    )  # fmt: skip
+
+
+def test_site_user_ssh_sftp_and_escapes(environment: dict[str, Any]) -> None:
+    """CloudPanel-style site user: SSH key login with SFTP and a shell in its own
+    site; other sites and host secrets stay unreachable; no tunnels."""
     env, tenant = environment, environment["tenant"]
     key = env["work"] / "key"
     sh("/usr/bin/ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-f", str(key))
@@ -203,34 +220,54 @@ def test_sftp_chroot_upload_and_escapes(environment: dict[str, Any]) -> None:
 
     local = env["work"] / "up.txt"
     local.write_text("uploaded over sftp\n")
-    ok = sftp(env, f"pwd\nput {local} public/up.txt\nls -1 /\n")
+    ok = sftp(env, f"put {local} app/public/up.txt\nls -1\n")
     assert ok.returncode == 0, ok.stderr
-    assert "Remote working directory: /app" in ok.stdout
-    assert "/data" in ok.stdout and "/etc" not in ok.stdout
     uploaded = Path(f"/srv/tenants/{tenant}/app/public/up.txt")
-    st = uploaded.stat()
-    assert pwd.getpwuid(st.st_uid).pw_name == f"{tenant}-deploy" and st.st_mode & 0o777 == 0o640
+    assert pwd.getpwuid(uploaded.stat().st_uid).pw_name == f"{tenant}-deploy"
     assert http_get("/up.txt") == (200, "uploaded over sftp\n")
 
-    # Escapes: nothing outside the tenant root exists for this user.
-    for attempt in ("get /etc/passwd", "cd /proc", "get ../../../etc/shadow", "ls /srv/tenants"):
-        r = sftp(env, attempt + "\n")
-        assert r.returncode != 0, f"{attempt!r} should fail: {r.stdout}"
-    # A symlink to a system file is created inside the chroot, and nginx refuses it.
-    assert sftp(env, "symlink /etc/passwd public/leak.txt\n").returncode == 0
+    # A shell, as the site user, in the site.
+    who = run_as_site_user(env, "id -un; pwd")
+    assert who.returncode == 0, who.stderr
+    assert who.stdout.split() == [f"{tenant}-deploy", f"/srv/tenants/{tenant}"]
+
+    # Escapes: host secrets, the list of sites and other sites' files stay closed.
+    for attempt in (
+        "cat /etc/shadow",
+        "ls /srv/tenants",
+        "ls /etc/ozenix/secrets",
+        "cat /var/lib/ozenix/registry.sqlite3",
+        "ls /root",
+    ):
+        r = run_as_site_user(env, attempt)
+        assert r.returncode != 0, f"{attempt!r} should fail: {r.stdout[:200]}"
+    other = sorted(p.name for p in Path("/srv/tenants").iterdir() if p.name != tenant)
+    if other and other[0].startswith("t"):
+        r = run_as_site_user(env, f"ls /srv/tenants/{other[0]}")
+        assert r.returncode != 0, "another site's files are readable"
+    assert run_as_site_user(env, "touch ~/.ssh_test").returncode != 0  # home is root-owned
+    # The site egress policy applies to site users too: no loopback services,
+    # no cloud metadata (the shell is not a way around the firewall).
+    for target in ("127.0.0.1', 9100", "169.254.169.254', 80"):
+        probe = run_as_site_user(
+            env,
+            'python3 -c "import socket; s=socket.socket(); s.settimeout(3); '
+            f"s.connect(('{target}))\"",
+        )
+        assert probe.returncode != 0, f"site user reached {target}"
+    assert run_as_site_user(env, "crontab -l 2>&1 | grep -qi 'not allowed'").returncode == 0
+    # A symlink to a system file inside the site: nginx refuses to serve it.
+    assert run_as_site_user(env, "ln -s /etc/passwd app/public/leak.txt").returncode == 0
     status, body = http_get("/leak.txt")
-    # nginx refuses the link (disable_symlinks); try_files may then fall back to index.php.
     assert "root:" not in body, (status, body[:200])
-    # No shell, no forwarding.
-    shell = ssh(env, "-T", "-o", "RequestTTY=no")
-    assert "uid=" not in shell.stdout
+    # No forwarding of any kind.
     forward = ssh(env, "-N", "-o", "ExitOnForwardFailure=yes", "-R", "127.0.0.1:19999:127.0.0.1:22")
     assert forward.returncode != 0
 
     listed = site_json(DOMAIN, "sftp", "list")["accounts"]
     assert [a["account"] for a in listed] == ["tester"]
     site_json(DOMAIN, "sftp", "revoke", "tester", "--confirm", DOMAIN)
-    assert sftp(env, "pwd\n").returncode != 0  # revoked: login refused
+    assert run_as_site_user(env, "true").returncode != 0  # revoked: login refused
 
 
 # --- monitoring -------------------------------------------------------------------------

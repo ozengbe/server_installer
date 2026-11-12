@@ -59,4 +59,4 @@ def test_nftables_available() -> None:
 def test_running_as_root_in_vm() -> None:
     # Integration tests mutate the system; refuse to run unless explicitly in a test VM.
     assert os.geteuid() == 0
-    assert Path("/etc/domainpilot-test-vm").is_file(), "not an Ozenix test VM"
+    assert Path("/etc/ozenix-test-vm").is_file(), "not an ozenix test VM"

@@ -1,4 +1,4 @@
-# Ozenix — System Architecture (Phase 1 draft)
+# ozenix — System Architecture (Phase 1 draft)
 
 Status: **PROPOSED — awaiting approval**. Nothing here is implemented yet.
 Related: [threat-model.md](threat-model.md) · [security-baseline.md](security-baseline.md) · [cli-spec.md](cli-spec.md) · [roadmap.md](roadmap.md)
@@ -28,7 +28,7 @@ Consequence: every runtime test has to run inside Ubuntu 24.04 VMs. Docker conta
             └───────┬────────┘
                     │ 80/443 only (CF ranges when proxied)
 ┌───────────────────▼──────────────────────────────────────────────────────┐
-│ Ozenix host (Ubuntu 24.04)                                           │
+│ ozenix host (Ubuntu 24.04)                                           │
 │                                                                           │
 │  nftables (default deny, v4+v6)   fail2ban   AppArmor   auditd/journald   │
 │                                                                           │
@@ -123,13 +123,13 @@ Tenants are identified internally by an opaque ID (`t0001`…). Domain names are
 | Code | `/srv/tenants/t0001/app` (owned by the deploy user, runtime has read access; docroot `app/public`) |
 | Writable data | `/srv/tenants/t0001/data` (uploads/cache, runtime-writable, **`noexec` via bind mount**) |
 | Temp | `/srv/tenants/t0001/tmp` (0700 runtime) plus systemd `PrivateTmp=yes` |
-| Logs | `/var/log/domainpilot/tenants/t0001/` (root-written nginx logs; PHP log owned by runtime). Read-only bind into the chroot. |
-| Runtime socket | `/run/domainpilot/t0001/php.sock` (dir `t0001:nginx 0750`, socket 0660; nginx.org packages run workers as `nginx`) |
-| PHP-FPM | `dp-php@t0001.service` (one master per tenant; config `/etc/domainpilot/tenants/t0001/php-fpm.conf`) |
+| Logs | `/var/log/ozenix/tenants/t0001/` (root-written nginx logs; PHP log owned by runtime). Read-only bind into the chroot. |
+| Runtime socket | `/run/ozenix/t0001/php.sock` (dir `t0001:nginx 0750`, socket 0660; nginx.org packages run workers as `nginx`) |
+| PHP-FPM | `dp-php@t0001.service` (one master per tenant; config `/etc/ozenix/tenants/t0001/php-fpm.conf`) |
 | Redis (optional) | `dp-redis@t0001.service`, unix socket only, `maxmemory` capped, ACL default user disabled |
 | Database | DB `t0001_<name>`, user `t0001`@`localhost`, grants only on `t0001\_%`, `MAX_USER_CONNECTIONS` set |
-| Secrets | `/etc/domainpilot/tenants/t0001/secrets/` (root:t0001 0750, files 0640). Exposed to the app through an env file or `LoadCredential=` |
-| cgroup | `dp-t0001.slice` under `domainpilot-tenants.slice`: `CPUQuota`, `MemoryMax`, `MemoryHigh`, `TasksMax`, `IOWeight` |
+| Secrets | `/etc/ozenix/tenants/t0001/secrets/` (root:t0001 0750, files 0640). Exposed to the app through an env file or `LoadCredential=` |
+| cgroup | `dp-t0001.slice` under `ozenix-tenants.slice`: `CPUQuota`, `MemoryMax`, `MemoryHigh`, `TasksMax`, `IOWeight` |
 | Firewall | Tenant cgroup path matched in nftables `output` (see 4.5) |
 
 ### 4.3 Runtime/deploy split (recommended default)
@@ -143,7 +143,7 @@ The PHP process runs as `t0001`. It can **read** `app/` but can **write** only `
 User=%i
 Group=%i
 Slice=dp-%i.slice
-ExecStart=/usr/sbin/php-fpm8.3 --nodaemonize --fpm-config /etc/domainpilot/tenants/%i/php-fpm.conf
+ExecStart=/usr/sbin/php-fpm8.3 --nodaemonize --fpm-config /etc/ozenix/tenants/%i/php-fpm.conf
 NoNewPrivileges=yes
 ProtectSystem=strict
 ProtectHome=yes
@@ -169,12 +169,12 @@ SystemCallArchitectures=native
 CapabilityBoundingSet=
 AmbientCapabilities=
 UMask=0027
-TemporaryFileSystem=/srv/tenants:ro /var/log/domainpilot:ro /run/domainpilot:ro
+TemporaryFileSystem=/srv/tenants:ro /var/log/ozenix:ro /run/ozenix:ro
 BindReadOnlyPaths=/srv/tenants/%i/app
-BindPaths=/srv/tenants/%i/data /srv/tenants/%i/tmp /run/domainpilot/%i
-InaccessiblePaths=/etc/domainpilot /var/lib/domainpilot /root /var/backups
+BindPaths=/srv/tenants/%i/data /srv/tenants/%i/tmp /run/ozenix/%i
+InaccessiblePaths=/etc/ozenix /var/lib/ozenix /root /var/backups
 IPAddressDeny=169.254.0.0/16 fe80::/10 fd00:ec2::254/128
-AppArmorProfile=domainpilot-tenant-%i
+AppArmorProfile=ozenix-tenant-%i
 Restart=on-failure
 RestartSec=5
 StartLimitIntervalSec=300
@@ -190,9 +190,9 @@ The only authorized flows:
 | # | From | To | Transport | Purpose |
 |---|---|---|---|---|
 | N1 | Internet / Cloudflare | nginx | TCP 80, 443; UDP 443 (HTTP/3) | Public web |
-| N2 | nginx | tenant runtime | unix socket `/run/domainpilot/<tid>/php.sock` | FastCGI / proxy |
+| N2 | nginx | tenant runtime | unix socket `/run/ozenix/<tid>/php.sock` | FastCGI / proxy |
 | N3 | tenant runtime | MariaDB | unix socket `/run/mysqld/mysqld.sock` | DB (MariaDB `skip-networking`) |
-| N4 | tenant runtime | its own Redis | unix socket `/run/domainpilot/<tid>/redis.sock` | Cache |
+| N4 | tenant runtime | its own Redis | unix socket `/run/ozenix/<tid>/redis.sock` | Cache |
 | N5 | tenant runtime | Internet | TCP 80/443 (+ 25/465/587 opt-in per tenant) | APIs, updates, mail |
 | N6 | tenant runtime | local resolver | UDP/TCP 53 to `127.0.0.53` | DNS |
 | N7 | admins | sshd | TCP 22 (allowlist or WireGuard) | Administration |
@@ -203,7 +203,7 @@ The only authorized flows:
 
 Enforcement:
 
-- **nftables `output` chain**: packets from sockets in `domainpilot-tenants.slice` (`socket cgroupv2 level 2`) are restricted to N5/N6. **All loopback TCP/UDP is dropped** (blocks reaching exporters, other services, and any tenant that accidentally binds to localhost). RFC1918/ULA/link-local destinations are dropped, as are cloud metadata addresses (169.254.169.254, fd00:ec2::254).
+- **nftables `output` chain**: packets from sockets in `ozenix-tenants.slice` (`socket cgroupv2 level 2`) are restricted to N5/N6. **All loopback TCP/UDP is dropped** (blocks reaching exporters, other services, and any tenant that accidentally binds to localhost). RFC1918/ULA/link-local destinations are dropped, as are cloud metadata addresses (169.254.169.254, fd00:ec2::254).
 - **systemd `IPAddressDeny=`** (cgroup eBPF) is a second, independent layer for metadata and link-local.
 - **Unix-socket reachability** is limited by directory permissions *and* by the mount namespace, since other tenants' socket directories aren't mounted.
 - **IPv4 and IPv6** rules are written once in an `inet` family table, so both protocols are always covered.
@@ -211,9 +211,9 @@ Enforcement:
 
 ### 4.5a Implementation notes (Phase 4, verified on Ubuntu 26.04)
 
-- **Sockets:** `/run/domainpilot/<tid>/php/php.sock` and `.../cache/cache.sock`. `/run/domainpilot` is 0711 (traversable, not listable). nginx reaches PHP because the `nginx` user is a member of each tenant group. Other tenants can't reach the sockets, because they aren't members and because the paths don't exist inside their namespace.
+- **Sockets:** `/run/ozenix/<tid>/php/php.sock` and `.../cache/cache.sock`. `/run/ozenix` is 0711 (traversable, not listable). nginx reaches PHP because the `nginx` user is a member of each tenant group. Other tenants can't reach the sockets, because they aren't members and because the paths don't exist inside their namespace.
 - **Units:** `dp-php@.service` and `dp-cache@.service` (installer) carry the whole sandbox. A per-tenant drop-in written by `site` only sets the binary and the slice `dptenants-<tid>.slice`, which holds the limits.
-- **AppArmor:** one profile per tenant, `domainpilot-tenant-<tid>`. On 26.04 systemd attaches it as a stack (`<profile>//&unconfined`), which is just as restrictive; the profile allows signals to the tenant's own stacked label. Processes can only execute the PHP-FPM or cache binary, so `mail()` and any `exec` bypass of `disable_functions` fail by design. Applications must send mail over SMTP; ports 25/465/587 are opt-in per tenant (`tenant_smtp_uids`).
+- **AppArmor:** one profile per tenant, `ozenix-tenant-<tid>`. On 26.04 systemd attaches it as a stack (`<profile>//&unconfined`), which is just as restrictive; the profile allows signals to the tenant's own stacked label. Processes can only execute the PHP-FPM or cache binary, so `mail()` and any `exec` bypass of `disable_functions` fail by design. Applications must send mail over SMTP; ports 25/465/587 are opt-in per tenant (`tenant_smtp_uids`).
 - **Egress:** nftables `meta skuid 20000-29999 jump tenant_egress` lets tenants reach only the DNS stub and outbound TCP 80/443. Loopback, RFC1918/CGNAT, link-local/metadata and multicast are dropped on IPv4 and IPv6. Matching on UID needs no per-tenant rules and can't fail at boot.
 - **Database:** `<tid>@localhost`, `unix_socket OR mysql_native_password`, ``ALL ON `<tid>_%`.*`` only, `MAX_USER_CONNECTIONS 20`.
 - **Code read-only for the runtime:** `app/` is owned by `<tid>-deploy` and mounted read-only in the PHP sandbox. Only `data/` and `tmp/` are writable.
@@ -236,7 +236,7 @@ Enforcement:
 admin ──ssh──► sudo (group dp-admins only, logged) ──► /usr/local/bin/site
                                                          │  python3 -I -E, stdlib only
                                                          ▼
-                              ┌──────────── domainpilot (root) ────────────┐
+                              ┌──────────── ozenix (root) ────────────┐
                               │ validate input → acquire lock → plan steps │
                               │ → journal → execute (argv only, no shell)  │
                               │ → validate configs → reload → audit log    │
@@ -253,22 +253,22 @@ Rules the code enforces:
 1. **Root never follows tenant-controlled paths.** Any operation under `/srv/tenants/<tid>` either drops to the tenant UID first (`setpriv`) or uses `os.open(..., O_NOFOLLOW)` / `openat`-style walking with `dir_fd`. This applies to chmod/chown fixes, backups, restores, and deletes. Recursive operations never use `shutil.rmtree` without `dir_fd` support verified.
 2. **No shell.** `subprocess.run([...], shell=False)` with absolute binary paths, a scrubbed environment (`PATH=/usr/sbin:/usr/bin:/sbin:/bin`, `LC_ALL=C`), a timeout, and captured output. A single `core.proc.run()` wrapper is the only allowed entry point, enforced by a lint test.
 3. **Strict validation at the edge.** Domains are IDNA-normalized to A-labels, lowercased, and checked against RFC 1035 label rules. Single-label, IP-literal, and reserved names are rejected. Tenant IDs match `^t\d{4,6}$`. Usernames match `^t\d{4,6}(-[a-z]{1,8})?$`. PHP versions come from an allowlist. Every value that reaches a template has already passed a typed validator, and templates (`string.Template`) refuse unknown placeholders.
-4. **Locking.** A global `flock` on `/run/domainpilot/global.lock` covers host-wide changes. A per-tenant lock covers tenant changes. Lock timeouts return exit code 4.
-5. **Atomic writes.** Write to a temp file in the target directory, `fsync`, `rename`, `fsync` the dir. The previous version is kept in `/var/lib/domainpilot/history/` for rollback.
-6. **Audit log.** One JSON event per privileged operation: `SUDO_USER`, argv (secrets redacted), plan, result, and duration. Events go to journald (`SYSLOG_IDENTIFIER=domainpilot-audit`) and to `/var/log/domainpilot/audit.jsonl`, which is append-only via `chattr +a` and shipped off-host by the monitoring pipeline.
+4. **Locking.** A global `flock` on `/run/ozenix/global.lock` covers host-wide changes. A per-tenant lock covers tenant changes. Lock timeouts return exit code 4.
+5. **Atomic writes.** Write to a temp file in the target directory, `fsync`, `rename`, `fsync` the dir. The previous version is kept in `/var/lib/ozenix/history/` for rollback.
+6. **Audit log.** One JSON event per privileged operation: `SUDO_USER`, argv (secrets redacted), plan, result, and duration. Events go to journald (`SYSLOG_IDENTIFIER=ozenix-audit`) and to `/var/log/ozenix/audit.jsonl`, which is append-only via `chattr +a` and shipped off-host by the monitoring pipeline.
 7. **Who can run it.** sudoers grants `site` only to `%dp-admins`. The CLI refuses to run unless `euid == 0`, and records the invoking admin.
 
-**State.** `/var/lib/domainpilot/registry.sqlite3` (root 0600, WAL mode) stores tenants, domains, aliases, TLS state, operation journal, and schema version with migrations. The registry is the source of truth. `site system audit` reports drift between the registry and the live system.
+**State.** `/var/lib/ozenix/registry.sqlite3` (root 0600, WAL mode) stores tenants, domains, aliases, TLS state, operation journal, and schema version with migrations. The registry is the source of truth. `site system audit` reports drift between the registry and the live system.
 
-**Configuration.** `/etc/domainpilot/domainpilot.toml` (`tomllib` is stdlib in 3.12) holds host settings and the optimization profile. Secrets never go here.
+**Configuration.** `/etc/ozenix/ozenix.toml` (`tomllib` is stdlib in 3.12) holds host settings and the optimization profile. Secrets never go here.
 
 ---
 
 ## 6. Source tree (proposed)
 
 ```text
-domainpilot-server/
-├── domainpilot/                 # Python package (installed to /usr/lib/domainpilot)
+ozenix-server/
+├── ozenix/                 # Python package (installed to /usr/lib/ozenix)
 │   ├── cli/                     # argparse grammar, output (text/json), exit codes
 │   ├── core/                    # proc runner, validation, atomic fs, locks, txn, audit, registry
 │   ├── isolation/               # tenant identity, sandbox units, AppArmor, cgroups, nft sets
@@ -297,8 +297,8 @@ The runtime is stdlib only. Development tooling (pytest, mypy `--strict`, ruff, 
 - **SSH changes:** `sshd -t`, then reload (never restart). The existing session is preserved. The CLI refuses changes that would leave zero admin keys or zero `AllowGroups` members.
 - **Optimization:** profile calculation is deterministic from hardware facts plus a 7-day metrics window, never instantaneous load. The output is a diff. `--apply` snapshots the current configs under an ID, and `site system optimize --rollback <id>` restores them.
 - **Updates:** unattended-upgrades only on `${distro_id}:${distro_codename}-security` (+ ESM if Pro). No auto-reboot. needrestart in list mode, plus an allowlist of stateless services it may restart (nginx, php-fpm masters). MariaDB is never restarted automatically. A post-update health check runs, and update history comes from the apt history log plus our audit events.
-- **Backups (Phase 8, implemented):** restic, one repository per tenant (`<base>/<tid>`) plus one for the server's own configuration (`<base>/system`: /etc/domainpilot, nginx, letsencrypt, mysql, php, ssh, AppArmor, nftables, and a consistent SQLite copy of the registry). Every repository password is derived from one 256-bit **master key** (HMAC-SHA256 per repository name). The key is shown once at `site system backup setup` and must be stored offline: the copy on the server is encrypted with that host's own key, so it is useless if the server is lost. Master key plus bucket credentials recover everything on a new server (`site system backup import-key`, then `site system backup sites` to list the lost server's sites and `site <domain> create --tenant-id` to recreate each with its old id, so repository, file owners and database names match). The master key is rotated in two steps (`site system backup rotate-key`, then `--finish` once the new key is stored offline), see runbooks/key-rotation.md. DB dumps stream `mariadb-dump --single-transaction` → `restic backup --stdin` through a checked two-process pipe (restic 0.16 on 24.04 lacks `--stdin-from-command`). A dump that fails half-way gets its truncated snapshot forgotten. Restores always go to a root-only staging directory on the tenants' filesystem, are verified by restic, have setuid bits and device/fifo nodes stripped, and are only then swapped in by rename. The replaced tree is kept for manual rollback (pruned after 7 days). Databases get a `pre-restore` safety snapshot first, and a failed import puts it back. Nightly `dp-backup.timer`. Weekly `dp-backup-drill.timer` runs `restic check` (2% of the data re-read) plus a restore drill of every site, and the monitor alerts when it fails or is overdue. **Immutability (D7):** an S3-compatible bucket with versioning and Object Lock (default retention, e.g. 30 days), with a key that cannot delete object versions. A compromised server can only add delete markers; locked versions survive. See install.md.
-- **Releases and upgrades (Phase 10, implemented):** releases are reproducible tarballs of a signed tag with a per-file `MANIFEST.sha256`, a `SHA256SUMS` and an SSH signature (`ssh-keygen -Y`, namespace `domainpilot-release`, keys in `release/allowed_signers`); see docs/release.md. The installer checks the manifest, compares the release with `/var/lib/domainpilot/release.json` (downgrades refused unless `--allow-downgrade`), takes a root-only pre-upgrade snapshot of Ozenix state (registry via the SQLite online backup, `/etc/domainpilot`, `/var/lib/domainpilot`, generated configs) and installs the CLI into `/usr/lib/domainpilot/releases/<version>`, test-imports it, then switches the `current` symlink atomically. Registry migrations run in transactions on first use; an older CLI refuses a newer schema. See docs/upgrade.md.
+- **Backups (Phase 8, implemented):** restic, one repository per tenant (`<base>/<tid>`) plus one for the server's own configuration (`<base>/system`: /etc/ozenix, nginx, letsencrypt, mysql, php, ssh, AppArmor, nftables, and a consistent SQLite copy of the registry). Every repository password is derived from one 256-bit **master key** (HMAC-SHA256 per repository name). The key is shown once at `site system backup setup` and must be stored offline: the copy on the server is encrypted with that host's own key, so it is useless if the server is lost. Master key plus bucket credentials recover everything on a new server (`site system backup import-key`, then `site system backup sites` to list the lost server's sites and `site <domain> create --tenant-id` to recreate each with its old id, so repository, file owners and database names match). The master key is rotated in two steps (`site system backup rotate-key`, then `--finish` once the new key is stored offline), see runbooks/key-rotation.md. DB dumps stream `mariadb-dump --single-transaction` → `restic backup --stdin` through a checked two-process pipe (restic 0.16 on 24.04 lacks `--stdin-from-command`). A dump that fails half-way gets its truncated snapshot forgotten. Restores always go to a root-only staging directory on the tenants' filesystem, are verified by restic, have setuid bits and device/fifo nodes stripped, and are only then swapped in by rename. The replaced tree is kept for manual rollback (pruned after 7 days). Databases get a `pre-restore` safety snapshot first, and a failed import puts it back. Nightly `dp-backup.timer`. Weekly `dp-backup-drill.timer` runs `restic check` (2% of the data re-read) plus a restore drill of every site, and the monitor alerts when it fails or is overdue. **Immutability (D7):** an S3-compatible bucket with versioning and Object Lock (default retention, e.g. 30 days), with a key that cannot delete object versions. A compromised server can only add delete markers; locked versions survive. See install.md.
+- **Releases and upgrades (Phase 10, implemented):** releases are reproducible tarballs of a signed tag with a per-file `MANIFEST.sha256`, a `SHA256SUMS` and an SSH signature (`ssh-keygen -Y`, namespace `ozenix-release`, keys in `release/allowed_signers`); see docs/release.md. The installer checks the manifest, compares the release with `/var/lib/ozenix/release.json` (downgrades refused unless `--allow-downgrade`), takes a root-only pre-upgrade snapshot of ozenix state (registry via the SQLite online backup, `/etc/ozenix`, `/var/lib/ozenix`, generated configs) and installs the CLI into `/usr/lib/ozenix/releases/<version>`, test-imports it, then switches the `current` symlink atomically. Registry migrations run in transactions on first use; an older CLI refuses a newer schema. See docs/upgrade.md.
 - **SFTP (Phase 8):** an "SFTP account" is a labelled public key on the tenant's deploy user (`<tid>-deploy`, owns `app/`, runs no code). Keys live in root-owned `/etc/ssh/authorized_keys.d/<user>`, each line with `restrict`. sshd's `Match Group dp-sftp` forces `internal-sftp -d /app -u 0027`, chrooted at the tenant root (`%h`, root-owned 0750). Membership of `dp-sftp` comes with the first key and goes with the last; archiving or erasing a site revokes all keys. nginx `disable_symlinks if_not_owner` stops symlinks uploaded over SFTP from exposing files outside the site.
 - **Monitoring (Phase 8):** no separate monitoring host (decided). `dp-monitor.timer` runs `site system monitor --notify` every 5 minutes: health checks, an HTTP probe of every enabled site, backup age and restore-drill result, and crash restarts recovered by systemd (`NRestarts`). It alerts only on change: new problem, resolved, a reminder for critical problems every N hours, crash events. Destinations are ntfy, Slack, Discord, Telegram or a generic webhook. The URL is a secret, given on stdin and stored encrypted. Bounded self-healing: nginx, MariaDB and fail2ban (drop-in) and the tenant units get `Restart=on-failure`, at most 5 starts in 10 minutes, then `OnFailure=dp-alert@%n` alerts at once. The Prometheus node exporter listens on loopback only.
 - **Cloudflare:** one API token per zone, least privilege (`Zone:DNS:Edit` for DNS-01; `Zone:Read`/`Zone Settings:Read` for audits). Write actions (`--apply`) show a diff and require confirmation. When proxied: Full (strict), Authenticated Origin Pulls with a **per-zone** client certificate (the global CF cert would accept *any* Cloudflare customer), `set_real_ip_from` limited to the published CF ranges (refreshed by timer with sanity checks), and the origin firewall restricted to CF ranges.

@@ -1,11 +1,11 @@
-# Managed by Ozenix. Sandbox for one tenant's PHP-FPM master (architecture §4.4).
+# Managed by ozenix. Sandbox for one tenant's PHP-FPM master (architecture §4.4).
 # Per-tenant settings (PHP version, slice) come from the drop-in written by `site`:
 #   /etc/systemd/system/dp-php@<tenant>.service.d/10-tenant.conf
 [Unit]
-Description=Ozenix PHP-FPM for tenant %i
+Description=ozenix PHP-FPM for tenant %i
 After=network.target mariadb.service dp-cache@%i.service
 Wants=dp-cache@%i.service
-ConditionPathExists=/etc/domainpilot/tenants/%i/php-fpm.conf
+ConditionPathExists=/etc/ozenix/tenants/%i/php-fpm.conf
 # No ExecReload: the sandbox may not exec, so php-fpm cannot re-exec itself on
 # USR2. Configuration changes use `systemctl restart` (Type=notify waits for ready).
 # Bounded self-healing: no endless restart loops.
@@ -23,16 +23,16 @@ Restart=on-failure
 RestartSec=5
 UMask=0027
 
-RuntimeDirectory=domainpilot/%i/php
+RuntimeDirectory=ozenix/%i/php
 RuntimeDirectoryMode=0750
 # Kept on stop: the other unit of this tenant may have it bind-mounted.
 RuntimeDirectoryPreserve=yes
 
 # Only this tenant's paths exist inside the namespace.
-TemporaryFileSystem=/srv/tenants:ro /etc/domainpilot:ro /var/log/domainpilot:ro /run/domainpilot:ro /var/lib/domainpilot:ro
-BindReadOnlyPaths=/srv/tenants/%i /srv/tenants/%i/app /etc/domainpilot/tenants/%i
-BindPaths=/srv/tenants/%i/data /srv/tenants/%i/tmp /var/log/domainpilot/tenants/%i /run/domainpilot/%i/php
-BindReadOnlyPaths=-/run/domainpilot/%i/cache
+TemporaryFileSystem=/srv/tenants:ro /etc/ozenix:ro /var/log/ozenix:ro /run/ozenix:ro /var/lib/ozenix:ro
+BindReadOnlyPaths=/srv/tenants/%i /srv/tenants/%i/app /etc/ozenix/tenants/%i
+BindPaths=/srv/tenants/%i/data /srv/tenants/%i/tmp /var/log/ozenix/tenants/%i /run/ozenix/%i/php
+BindReadOnlyPaths=-/run/ozenix/%i/cache
 PrivateTmp=yes
 ProtectSystem=strict
 ProtectHome=yes
@@ -57,6 +57,8 @@ RestrictRealtime=yes
 LockPersonality=yes
 MemoryDenyWriteExecute=yes
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+# No TCP/UDP listening at all (sockets are unix): cannot squat on a site app port.
+SocketBindDeny=any
 SystemCallArchitectures=native
 SystemCallFilter=@system-service
 SystemCallFilter=~@mount @swap @reboot @raw-io @module @clock @cpu-emulation @debug @obsolete
@@ -65,7 +67,7 @@ SystemCallErrorNumber=EPERM
 # Second, independent layer next to the nftables egress policy.
 IPAddressDeny=169.254.0.0/16 fe80::/10 fd00:ec2::254/128
 
-AppArmorProfile=domainpilot-tenant-%i
+AppArmorProfile=ozenix-tenant-%i
 
 [Install]
 WantedBy=multi-user.target

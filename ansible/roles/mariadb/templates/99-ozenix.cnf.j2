@@ -1,0 +1,16 @@
+# Managed by ozenix (role mariadb). Sorts last in mariadb.conf.d, so it wins.
+[mysqld]
+# Unix socket only: tenants and exporters connect via /run/mysqld/mysqld.sock.
+skip-networking
+bind-address = 127.0.0.1
+local_infile = 0
+secure_file_priv = /var/lib/mysql-files
+symbolic-links = 0
+character-set-server = utf8mb4
+collation-server = utf8mb4_unicode_ci
+# Sizing (buffer pool, connections, caches) lives in 98-ozenix-tuning.cnf,
+# owned by `site system optimize`.
+# Lets the optimizer grow the buffer pool live, without a restart (MariaDB 11.8+
+# fixes this ceiling at startup; it reserves address space only). "loose-" makes
+# older servers (10.11) that lack the variable ignore it instead of failing.
+loose-innodb_buffer_pool_size_max = {{ [256, (ansible_facts['memtotal_mb'] * dp_mariadb_buffer_pool_max_pct // 100) // 64 * 64] | max }}M

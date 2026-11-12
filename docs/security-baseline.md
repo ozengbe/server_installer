@@ -1,4 +1,4 @@
-# Ozenix — Security Baseline (Phase 1 draft)
+# ozenix — Security Baseline (Phase 1 draft)
 
 This is the target state the Ansible installer enforces and `site system audit` checks. Each line becomes an audit check ID in Phase 9.
 
@@ -8,7 +8,7 @@ This is the target state the Ansible installer enforces and `site system audit` 
 - sysctl: `kernel.kptr_restrict=2`, `kernel.dmesg_restrict=1`, `kernel.unprivileged_bpf_disabled=1`, `kernel.yama.ptrace_scope=2`, `fs.protected_symlinks=1`, `fs.protected_hardlinks=1`, `fs.protected_fifos=2`, `fs.protected_regular=2`, `fs.suid_dumpable=0`, `net.ipv4.conf.all.rp_filter=1`, no IP forwarding (except WireGuard / Tier C as required), `kernel.apparmor_restrict_unprivileged_userns=1`.
 - AppArmor enabled. Every shipped and generated profile is in enforce mode.
 - Time sync via `systemd-timesyncd` or chrony (TLS and logs depend on correct time).
-- auditd rules for: sudo, changes under `/etc/domainpilot`, `/etc/ssh`, `/etc/nginx`, `/etc/sudoers*`, and nftables changes.
+- auditd rules for: sudo, changes under `/etc/ozenix`, `/etc/ssh`, `/etc/nginx`, `/etc/sudoers*`, and nftables changes.
 
 ## SSH
 - `PermitRootLogin no`, `PasswordAuthentication no`, `KbdInteractiveAuthentication no`, `AuthenticationMethods publickey`.
@@ -39,7 +39,7 @@ This is the target state the Ansible installer enforces and `site system audit` 
 - `skip-networking`, `local_infile=0`, `secure_file_priv=/var/lib/mysql-files` (empty, root-only). `root@localhost` uses `unix_socket` auth only. Anonymous users and the test DB are removed.
 
 ## Redis / Valkey (per tenant)
-- `port 0`, `unixsocket` under `/run/domainpilot/<tid>/` with mode 0660. Default ACL user off; one ACL user per tenant. `rename-command`/ACL denies `CONFIG`, `DEBUG`, `MODULE`. `maxmemory` set with `allkeys-lru`. `protected-mode yes`.
+- `port 0`, `unixsocket` under `/run/ozenix/<tid>/` with mode 0660. Default ACL user off; one ACL user per tenant. `rename-command`/ACL denies `CONFIG`, `DEBUG`, `MODULE`. `maxmemory` set with `allkeys-lru`. `protected-mode yes`.
 
 ## Secrets
 - None in source, templates, logs, or `ps` output (secrets are passed by file descriptor, credential file, or stdin, never argv).

@@ -2,12 +2,12 @@
 
 * `system audit`, `site <d> isolation audit|test`, `site <d> security` run
   against the live server and real sites, and must report no critical finding.
-* Negative tests attack Ozenix itself, the way a malicious tenant (T2) or
+* Negative tests attack ozenix itself, the way a malicious tenant (T2) or
   a hostile argument would: injection and traversal through the real binary,
   symlinks planted by the tenant against root's backup/restore/purge, setuid
   uploads.
 
-Disposable test host only (/etc/domainpilot-test-vm).
+Disposable test host only (/etc/ozenix-test-vm).
 """
 
 from __future__ import annotations
@@ -28,8 +28,8 @@ pytestmark = pytest.mark.integration
 
 SITE = "/usr/local/bin/site"
 A, B = "p9a.example.com", "p9b.example.com"
-REPO = Path("/var/backups/domainpilot-p9test")
-ETC = Path("/etc/domainpilot")
+REPO = Path("/var/backups/ozenix-p9test")
+ETC = Path("/etc/ozenix")
 
 
 def site(*args: str, stdin: str | None = None) -> subprocess.CompletedProcess[str]:
@@ -67,7 +67,7 @@ def problems(report: dict[str, Any], severity: str = "critical") -> list[str]:
 
 @pytest.fixture(scope="module")
 def sites(tmp_path_factory: pytest.TempPathFactory) -> Iterator[dict[str, str]]:
-    assert Path("/etc/domainpilot-test-vm").is_file(), "test host only"
+    assert Path("/etc/ozenix-test-vm").is_file(), "test host only"
     saved = tmp_path_factory.mktemp("saved")
     had_backup = (ETC / "backup.json").exists()
     if had_backup:
@@ -253,9 +253,11 @@ def test_setuid_uploads_are_flagged_and_stripped_on_restore(sites: dict[str, str
 
 
 def test_tenant_users_have_no_privileges(sites: dict[str, str]) -> None:
-    for user in (sites[A], f"{sites[A]}-deploy"):
+    # The PHP user never logs in; the site user has a shell (SSH key, own site).
+    shells = {sites[A]: ("/usr/sbin/nologin", "/bin/false"), f"{sites[A]}-deploy": ("/bin/bash",)}
+    for user, allowed in shells.items():
         entry = pwd.getpwnam(user)
-        assert entry.pw_shell in ("/usr/sbin/nologin", "/bin/false")
+        assert entry.pw_shell in allowed, (user, entry.pw_shell)
         groups = subprocess.run(["/usr/bin/id", "-nG", user], capture_output=True, text=True)
         assert not {"sudo", "adm", "dp-admins", "root"} & set(groups.stdout.split())
     sudoers = subprocess.run(

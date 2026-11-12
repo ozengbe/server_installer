@@ -10,7 +10,7 @@
 
 - name: ACME HTTP-01 webroot (challenge tokens are public by design)
   ansible.builtin.file:
-    path: /var/lib/domainpilot-acme
+    path: /var/lib/ozenix-acme
     state: directory
     owner: root
     group: root
@@ -26,18 +26,18 @@
 
 - name: Reload nginx after a renewal, only if its configuration is valid
   ansible.builtin.copy:
-    dest: /etc/letsencrypt/renewal-hooks/deploy/50-domainpilot-nginx
+    dest: /etc/letsencrypt/renewal-hooks/deploy/50-ozenix-nginx
     owner: root
     group: root
     mode: "0755"
     content: |
       #!/bin/sh
-      # Managed by Ozenix. Runs after certbot renewed a certificate.
+      # Managed by ozenix. Runs after certbot renewed a certificate.
       set -eu
       if /usr/sbin/nginx -t -q; then
           /usr/bin/systemctl reload nginx
       else
-          logger -t domainpilot-acme -p user.err "renewed certificate NOT deployed: nginx -t failed"
+          logger -t ozenix-acme -p user.err "renewed certificate NOT deployed: nginx -t failed"
           exit 1
       fi
 
@@ -48,7 +48,7 @@
     state: started
 
 # DNS-01 renewals through Cloudflare: certbot's renewal config points at
-# /run/domainpilot/cloudflare/<label>.ini. These hooks create those files from
+# /run/ozenix/cloudflare/<label>.ini. These hooks create those files from
 # the encrypted store right before a renewal and wipe them right after, so the
 # plaintext token only ever exists in RAM, and only while certbot runs.
 - name: Renewal pre/post hook directories
@@ -62,18 +62,18 @@
 
 - name: Decrypt Cloudflare tokens into RAM before a renewal
   ansible.builtin.copy:
-    dest: /etc/letsencrypt/renewal-hooks/pre/10-domainpilot-cloudflare
+    dest: /etc/letsencrypt/renewal-hooks/pre/10-ozenix-cloudflare
     owner: root
     group: root
     mode: "0755"
     content: |
       #!/bin/sh
-      # Managed by Ozenix.
+      # Managed by ozenix.
       set -eu
       umask 077
-      dir=/run/domainpilot/cloudflare
+      dir=/run/ozenix/cloudflare
       mkdir -p "$dir" && chmod 0700 "$dir"
-      for cred in /etc/domainpilot/secrets/cloudflare/*.cred; do
+      for cred in /etc/ozenix/secrets/cloudflare/*.cred; do
           [ -e "$cred" ] || continue
           label=$(basename "$cred" .cred)
           token=$(systemd-creds decrypt --name="cloudflare-$label" "$cred" -)
@@ -82,14 +82,14 @@
 
 - name: Wipe them again after the renewal
   ansible.builtin.copy:
-    dest: /etc/letsencrypt/renewal-hooks/post/90-domainpilot-cloudflare
+    dest: /etc/letsencrypt/renewal-hooks/post/90-ozenix-cloudflare
     owner: root
     group: root
     mode: "0755"
     content: |
       #!/bin/sh
-      # Managed by Ozenix.
-      for f in /run/domainpilot/cloudflare/*.ini; do
+      # Managed by ozenix.
+      for f in /run/ozenix/cloudflare/*.ini; do
           [ -e "$f" ] || continue
           shred -u "$f" 2>/dev/null || rm -f "$f"
       done

@@ -9,10 +9,10 @@ from pathlib import Path
 
 import pytest
 
-from domainpilot.core import audit, config
-from domainpilot.core.errors import LockBusy, ValidationError
-from domainpilot.core.locks import FileLock
-from domainpilot.core.output import AUDIT_DISCLAIMER, Output, table
+from ozenix.core import audit, config
+from ozenix.core.errors import LockBusy, ValidationError
+from ozenix.core.locks import FileLock
+from ozenix.core.output import AUDIT_DISCLAIMER, Output, table
 
 # --- locks ------------------------------------------------------------------
 

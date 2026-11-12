@@ -13,8 +13,8 @@ from pathlib import Path
 
 import pytest
 
-from domainpilot.cli import commands
-from domainpilot.cli.main import _leading_words, _Parser, split_globals
+from ozenix.cli import commands
+from ozenix.cli.main import _leading_words, _Parser, split_globals
 
 ROOT = Path(__file__).resolve().parents[2]
 DOCS = sorted(

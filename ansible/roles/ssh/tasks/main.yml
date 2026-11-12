@@ -28,10 +28,10 @@
 - name: Apply sshd configuration with validation and restore on failure
   block:
     # Drop-in is included at the top of sshd_config; first value wins in sshd.
-    - name: Global sshd hardening drop-in
+    - name: Site-user key location (sshd drop-in)
       ansible.builtin.template:
-        src: 00-domainpilot.conf.j2
-        dest: /etc/ssh/sshd_config.d/00-domainpilot.conf
+        src: 00-ozenix.conf.j2
+        dest: /etc/ssh/sshd_config.d/00-ozenix.conf
         owner: root
         group: root
         mode: "0644"
@@ -39,7 +39,7 @@
       register: dp_sshd_dropin
       notify: Reload sshd
 
-    - name: Use the in-process SFTP server (required for chroot)
+    - name: Use the in-process SFTP server
       ansible.builtin.lineinfile:
         path: /etc/ssh/sshd_config
         regexp: '^\s*Subsystem\s+sftp\s'
@@ -54,7 +54,7 @@
         path: /etc/ssh/sshd_config
         # Old product name kept on purpose: it is how existing servers find their
         # block (a new marker would add a second copy).
-        marker: "# {mark} DomainPilot managed block"
+        marker: "# {mark} ozenix managed block"
         insertafter: EOF
         block: "{{ lookup('ansible.builtin.template', 'match-blocks.j2') }}"
         validate: /usr/sbin/sshd -t -f %s
@@ -68,7 +68,7 @@
     - name: Restore previous drop-in
       ansible.builtin.copy:
         src: "{{ dp_sshd_dropin.backup_file }}"
-        dest: /etc/ssh/sshd_config.d/00-domainpilot.conf
+        dest: /etc/ssh/sshd_config.d/00-ozenix.conf
         remote_src: true
         owner: root
         group: root
@@ -77,7 +77,7 @@
 
     - name: Remove new drop-in that had no predecessor
       ansible.builtin.file:
-        path: /etc/ssh/sshd_config.d/00-domainpilot.conf
+        path: /etc/ssh/sshd_config.d/00-ozenix.conf
         state: absent
       when: dp_sshd_dropin is changed and dp_sshd_dropin.backup_file is not defined
 

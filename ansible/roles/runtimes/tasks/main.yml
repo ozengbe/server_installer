@@ -1,0 +1,79 @@
+---
+# App runtimes for Node.js and Python sites.
+#
+# Node.js: official nodejs.org builds, several majors side by side under
+# /opt/ozenix/node/<major> (each site picks one). Every download is checked
+# against SHASUMS256.txt, whose signature must verify with the Node.js release
+# keys vendored in this repository (files/nodejs-release-keys.asc). The newest
+# release of each major is installed; re-running the installer updates them.
+#
+# Python: the Ubuntu release's own python3 (security updates from Canonical),
+# plus venv and pip, so each site keeps its packages in app/.venv.
+
+- name: Valid Node.js settings
+  ansible.builtin.assert:
+    that:
+      - dp_node_versions | select("match", "^[0-9]{2}\Z") | list | length == dp_node_versions | length
+      - dp_node_versions | length == 0 or dp_node_default in dp_node_versions
+    fail_msg: "dp_node_versions must list majors like \"24\", and include dp_node_default"
+
+- name: Python runtime for Python sites
+  ansible.builtin.apt:
+    name: [python3, python3-venv, python3-pip, python3-dev, build-essential]
+    state: present
+  when: dp_python_sites | bool
+
+- name: Node.js runtimes
+  when: dp_node_versions | length > 0
+  block:
+    - name: Tools to verify and unpack Node.js releases
+      ansible.builtin.apt:
+        name: [gpg, gpgv, xz-utils]
+        state: present
+
+    - name: Node.js directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+      loop: [/opt/ozenix, /opt/ozenix/node, /var/cache/ozenix, /var/cache/ozenix/node]
+
+    - name: Install the vendored Node.js release keys
+      ansible.builtin.copy:
+        src: nodejs-release-keys.asc
+        dest: /usr/share/keyrings/nodejs-release-keys.asc
+        owner: root
+        group: root
+        mode: "0644"
+      register: runtimes_node_keys
+
+    - name: Build the keyring gpgv verifies against
+      ansible.builtin.command: >-
+        /usr/bin/gpg --batch --yes --dearmor
+        --output /usr/share/keyrings/nodejs-release-keys.gpg
+        /usr/share/keyrings/nodejs-release-keys.asc
+      when: runtimes_node_keys is changed  # noqa: no-handler
+      changed_when: true
+
+    - name: Read the list of Node.js releases
+      ansible.builtin.uri:
+        url: https://nodejs.org/dist/index.json
+        return_content: true
+        timeout: 30
+      register: runtimes_node_index
+
+    - name: Pick the newest release of each requested major
+      ansible.builtin.set_fact:
+        runtimes_node_releases: >-
+          {{ runtimes_node_releases | default({}) | combine({item: (runtimes_node_index.json
+             | selectattr('version', 'match', '^v' ~ item ~ '\.[0-9]+\.[0-9]+$')
+             | map(attribute='version') | first)}) }}
+      loop: "{{ dp_node_versions }}"
+
+    - name: Install each Node.js major
+      ansible.builtin.include_tasks: node.yml
+      loop: "{{ dp_node_versions }}"
+      loop_control:
+        loop_var: node_major

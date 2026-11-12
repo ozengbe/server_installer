@@ -1,6 +1,6 @@
-# Managed by Ozenix (role monitoring).
+# Managed by ozenix (role monitoring).
 [Unit]
-Description=Ozenix self-monitoring every 5 minutes
+Description=ozenix self-monitoring every 5 minutes
 
 [Timer]
 OnBootSec=2min

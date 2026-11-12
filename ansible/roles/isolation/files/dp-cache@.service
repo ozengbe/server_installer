@@ -1,9 +1,9 @@
-# Managed by Ozenix. Sandbox for one tenant's cache server (Valkey/Redis),
+# Managed by ozenix. Sandbox for one tenant's cache server (Valkey/Redis),
 # unix socket only. Per-tenant settings: dp-cache@<tenant>.service.d/10-tenant.conf
 [Unit]
-Description=Ozenix cache for tenant %i
+Description=ozenix cache for tenant %i
 After=network.target
-ConditionPathExists=/etc/domainpilot/tenants/%i/cache.conf
+ConditionPathExists=/etc/ozenix/tenants/%i/cache.conf
 StartLimitIntervalSec=300
 StartLimitBurst=5
 # After the last failed restart: alert (role monitoring, dp-alert@.service).
@@ -18,14 +18,14 @@ Restart=on-failure
 RestartSec=5
 UMask=0077
 
-RuntimeDirectory=domainpilot/%i/cache
+RuntimeDirectory=ozenix/%i/cache
 RuntimeDirectoryMode=0750
 # Kept on stop: the other unit of this tenant may have it bind-mounted.
 RuntimeDirectoryPreserve=yes
 
-TemporaryFileSystem=/srv/tenants:ro /etc/domainpilot:ro /var/log/domainpilot:ro /run/domainpilot:ro /var/lib/domainpilot:ro
-BindReadOnlyPaths=/etc/domainpilot/tenants/%i
-BindPaths=/var/lib/domainpilot/cache/%i /run/domainpilot/%i/cache
+TemporaryFileSystem=/srv/tenants:ro /etc/ozenix:ro /var/log/ozenix:ro /run/ozenix:ro /var/lib/ozenix:ro
+BindReadOnlyPaths=/etc/ozenix/tenants/%i
+BindPaths=/var/lib/ozenix/cache/%i /run/ozenix/%i/cache
 PrivateTmp=yes
 ProtectSystem=strict
 ProtectHome=yes
@@ -51,12 +51,14 @@ RestrictRealtime=yes
 LockPersonality=yes
 MemoryDenyWriteExecute=yes
 RestrictAddressFamilies=AF_UNIX
+# No TCP/UDP listening at all (sockets are unix): cannot squat on a site app port.
+SocketBindDeny=any
 SystemCallArchitectures=native
 SystemCallFilter=@system-service
 SystemCallFilter=~@mount @swap @reboot @raw-io @module @clock @cpu-emulation @debug @obsolete
 SystemCallErrorNumber=EPERM
 
-AppArmorProfile=domainpilot-tenant-%i
+AppArmorProfile=ozenix-tenant-%i
 
 [Install]
 WantedBy=multi-user.target

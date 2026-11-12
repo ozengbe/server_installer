@@ -1,5 +1,5 @@
 ---
-- name: Ozenix groups
+- name: Groups for ozenix
   ansible.builtin.group:
     name: "{{ item }}"
     system: true
@@ -67,7 +67,7 @@
 - name: Sudo policy for dp-admins
   ansible.builtin.template:
     src: sudoers.j2
-    dest: /etc/sudoers.d/90-domainpilot
+    dest: /etc/sudoers.d/90-ozenix
     owner: root
     group: root
     mode: "0440"

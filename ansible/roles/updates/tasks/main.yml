@@ -11,7 +11,7 @@
     group: root
     mode: "0644"
     content: |
-      // Managed by Ozenix
+      // Managed by ozenix
       APT::Periodic::Update-Package-Lists "1";
       APT::Periodic::Unattended-Upgrade "1";
       APT::Periodic::AutocleanInterval "7";
@@ -21,12 +21,12 @@
 # (Phase 9) flags any -updates/-proposed/-backports origin added by hand.
 - name: Unattended-upgrades policy
   ansible.builtin.copy:
-    dest: /etc/apt/apt.conf.d/52domainpilot-unattended
+    dest: /etc/apt/apt.conf.d/52ozenix-unattended
     owner: root
     group: root
     mode: "0644"
     content: |
-      // Managed by Ozenix. Never reboot production servers automatically.
+      // Managed by ozenix. Never reboot production servers automatically.
       Unattended-Upgrade::Automatic-Reboot "false";
       Unattended-Upgrade::Remove-Unused-Kernel-Packages "true";
       Unattended-Upgrade::Remove-Unused-Dependencies "false";
@@ -38,12 +38,12 @@
 # Restart services that use patched libraries, except stateful ones.
 - name: Configure needrestart policy
   ansible.builtin.copy:
-    dest: /etc/needrestart/conf.d/90-domainpilot.conf
+    dest: /etc/needrestart/conf.d/90-ozenix.conf
     owner: root
     group: root
     mode: "0644"
     content: |
-      # Managed by Ozenix
+      # Managed by ozenix
       $nrconf{restart} = 'a';
       # Never restart the database automatically; reported for a maintenance window instead.
       $nrconf{override_rc}{qr(^mariadb)} = 0;
@@ -69,12 +69,12 @@
 
 - name: Upgrade timer runs in the maintenance window
   ansible.builtin.copy:
-    dest: /etc/systemd/system/apt-daily-upgrade.timer.d/90-domainpilot.conf
+    dest: /etc/systemd/system/apt-daily-upgrade.timer.d/90-ozenix.conf
     owner: root
     group: root
     mode: "0644"
     content: |
-      # Managed by Ozenix
+      # Managed by ozenix
       [Timer]
       OnCalendar=
       OnCalendar=*-*-* {{ dp_updates_window_start }}
@@ -84,12 +84,12 @@
 
 - name: Run the health check after every unattended upgrade
   ansible.builtin.copy:
-    dest: /etc/systemd/system/apt-daily-upgrade.service.d/90-domainpilot.conf
+    dest: /etc/systemd/system/apt-daily-upgrade.service.d/90-ozenix.conf
     owner: root
     group: root
     mode: "0644"
     content: |
-      # Managed by Ozenix. "-" prefix: a failing check is logged/alerted, not fatal.
+      # Managed by ozenix. "-" prefix: a failing check is logged/alerted, not fatal.
       [Service]
       ExecStartPost=-/usr/local/sbin/dp-healthcheck --post-update
   register: updates_service

@@ -1,4 +1,4 @@
-# Ozenix command reference
+# ozenix command reference
 
 Every command, grouped by task. Replace `example.com` with your domain.
 
@@ -11,8 +11,10 @@ Every command, grouped by task. Replace `example.com` with your domain.
 ## Sites
 
 ```bash
-# Create a PHP website (its own users, PHP, cache and sandbox; HTTPS at once)
-sudo site example.com create
+# Create a PHP website with its own Linux user "john" (SSH key login: SFTP + shell).
+# The site also gets its own PHP, cache and sandbox, and HTTPS at once.
+# On a terminal, a missing --user or --key is asked for.
+sudo site example.com create --user john --key john.pub
 
 # Create a static HTML website
 sudo site example.com create --type static
@@ -23,8 +25,8 @@ sudo site example.com create --type proxy --upstream https://127.0.0.1:3000
 # Extra names for the same site (www, parked domains)
 sudo site example.com create --alias www.example.com --alias example.net
 
-# A specific PHP version (if installed)
-sudo site example.com create --php 8.3
+# A specific PHP version: 8.2, 8.3, 8.4 or 8.5 (see "PHP versions" below)
+sudo site example.com create --user john --key john.pub --php 8.2
 
 # Information about a site (users, PHP, database, certificate, isolation)
 sudo site example.com status
@@ -48,6 +50,102 @@ sudo site example.com logs                 # access log
 sudo site example.com logs --error
 sudo site example.com logs --php --lines 200
 ```
+
+## Node.js and Python sites
+
+A Node.js or Python site runs as an app with its own sandboxed service, `dp-app@<tNNNN>`:
+- the app runs as the site's runtime user;
+- it restarts automatically if it crashes;
+- its log is in `/var/log/ozenix/tenants/<tNNNN>/app.log`;
+- nginx (with HTTPS) forwards the site's traffic to it.
+
+The app must listen on `127.0.0.1:$PORT`. `PORT` is set for it, and is 10000 plus the site number. Only this site's app may use that port: other sites and shell users get "permission denied".
+
+```bash
+# Node.js (22, 24 or 26; default 24). Starts with "npm start".
+sudo site app.example.com create --type nodejs --user john --key john.pub
+sudo site app.example.com create --type nodejs --node 22 --start "node dist/server.js"
+
+# Python (the Ubuntu release's python3, with a virtualenv in app/.venv). Starts "python3 app.py".
+sudo site api.example.com create --type python --user anna --key anna.pub \
+  --start ".venv/bin/gunicorn -b 127.0.0.1:$PORT app:app"
+
+# Manage the app
+sudo site app.example.com app status            # running? restarts, port, log file
+sudo site app.example.com app restart           # after deploying new code
+sudo site app.example.com app set --start "npm run start:prod"
+sudo site app.example.com app set --node 26     # switch Node.js version
+sudo site app.example.com logs --error
+```
+
+**Deploying as the site user** (`ssh john@server`): the shell starts in `~/app`, with the site's Node.js version on `PATH` (or the virtualenv active for Python) and `PORT` set. Then:
+
+```
+git pull && npm ci && npm run build      # Node.js
+python3 -m venv .venv && .venv/bin/pip install -r requirements.txt   # Python (first time)
+```
+
+Then run `sudo site app.example.com app restart`. The app may write only to `~/data` and `~/tmp`; its code in `~/app` is read-only to it, as for PHP.
+
+## Laravel sites
+
+```bash
+sudo site shop.example.com create --type laravel --user john --key john.pub --php 8.4
+```
+
+**Deploy as the site user** (`ssh john@server`). The shell starts in `~/app`, with the site's PHP version as `php`:
+
+```
+git clone https://github.com/you/shop.git ~/tmp/shop && cp -a ~/tmp/shop/. ~/app/   # or upload over SFTP
+composer install --no-dev --optimize-autoloader
+cp .env.example .env && php artisan key:generate
+php artisan migrate --force && php artisan config:cache && php artisan route:cache
+```
+
+What ozenix does differently for Laravel, and why:
+
+| Laravel normally... | On ozenix | Why |
+|---|---|---|
+| writes to `storage/` and `bootstrap/cache/` inside the code | writes to `~/data/storage` and `~/data/cache`. Laravel's own `LARAVEL_STORAGE_PATH` and `APP_*_CACHE` settings are set for PHP-FPM, the scheduler, the queue and your shell. | The code in `~/app` stays **read-only for PHP**, so a hacked app can't change its own code. |
+| runs any `.php` file under `public/` | runs only `public/index.php`. Every other `.php` URL returns 404. | An uploaded or planted script is never executed. |
+| `php artisan storage:link` | not needed: `/storage/...` URLs are served from `~/data/storage/app/public`, and PHP is never run there | User uploads can't become code. |
+| cron `* * * * * php artisan schedule:run` | built in: `dp-laravel-schedule@<tNNNN>.timer` runs every minute, sandboxed | — |
+| supervisor for `queue:work` | `sudo site shop.example.com laravel queue on` (or `off`) | It restarts automatically, and an alert fires if it keeps failing. |
+
+Logs: `~/data/storage/logs/laravel.log`, and in `/var/log/ozenix/tenants/<tNNNN>/`: `laravel-schedule.log` and `laravel-queue.log`.
+
+## Protecting `.env`
+
+Secrets in `.env` (database password, `APP_KEY`, API keys) get several layers of protection, for every PHP, Laravel, Node.js and Python site:
+
+- **Never served:** nginx returns 404 for every dot-file (`/.env`, `/.env.backup`, `/.git/…`) and for `composer.json`, `artisan` and similar files, on every site.
+- **Outside the web root:** keep `.env` in `~/app`, never in `~/app/public`.
+- **PHP can read it, never change it:** owner is the site user, the group is the site's PHP, mode `0640`. One command fixes this:
+  ```bash
+  sudo site shop.example.com env protect
+  ```
+  New files created by the site user get mode `0640` automatically (`umask 027` in its shell).
+- **Checked:** `sudo site shop.example.com security` reports:
+  - a `.env` file in a web folder (critical);
+  - wrong owner or permissions;
+  - `APP_DEBUG=true` (critical: debug pages show secrets);
+  - `APP_ENV` other than `production`;
+  - an empty `APP_KEY`.
+
+  Values are never printed.
+- **Backups** contain `.env` encrypted, like the rest of the site.
+
+## PHP versions
+
+PHP 8.2, 8.3, 8.4 and 8.5 are installed side by side, and each site picks its own:
+
+```bash
+sudo site example.com create --php 8.4
+sudo site example.com php 8.2          # switch an existing site
+sudo site example.com php status
+```
+
+On **Ubuntu 24.04** all four come from the PHP maintainer's repository (ppa:ondrej/php; its key is pinned by the installer). On **Ubuntu 26.04** that repository has no packages yet, so 26.04 offers PHP 8.5 only. Re-run `sudo installer/install.sh` once the repository supports 26.04, and the other versions appear.
 
 ## HTTPS (SSL)
 
@@ -79,7 +177,7 @@ For a **reverse proxy** site, HTTPS works the same way: nginx terminates TLS and
 
 ## Files (SFTP)
 
-Every site has its own SFTP login, chrooted to the site, with no shell. Access uses keys only, no passwords.
+Every site has its own Linux user (chosen at `create --user`). It logs in with SSH keys only (no passwords), and gets SFTP and a shell in its own site. It cannot read other sites. Each key has a label, so you can add several people or computers and revoke them one by one.
 
 ```bash
 # Give someone access with their SSH public key
@@ -152,7 +250,7 @@ sudo site system audit
 
 ## Cloudflare (optional)
 
-Ozenix works behind Cloudflare without any token: you create the DNS records yourself. A token is needed only if Ozenix should create the records itself, validate certificates through DNS, or review the zone's settings.
+ozenix works behind Cloudflare without any token: you create the DNS records yourself. A token is needed only if ozenix should create the records itself, validate certificates through DNS, or review the zone's settings.
 
 ```bash
 sudo site system cloudflare token add           # token read from a hidden prompt
@@ -197,28 +295,32 @@ sudo installer/install.sh --check     # preview
 sudo installer/install.sh             # install / re-apply / upgrade
 ```
 
-PHP and MariaDB versions are the Ubuntu release's own, so they receive Canonical security updates:
+What the installer puts on the server:
 
-| Ubuntu | PHP | MariaDB |
-|---|---|---|
-| 24.04 | 8.3 | 10.11 |
-| 26.04 | 8.5 | 11.8 |
+| Component | Ubuntu 24.04 | Ubuntu 26.04 | Source |
+|---|---|---|---|
+| nginx | stable | stable | nginx.org (key pinned) |
+| PHP-FPM | 8.2, 8.3, 8.4, 8.5 | 8.5 (more once ppa:ondrej/php supports 26.04) | Ubuntu, ppa:ondrej/php (key pinned) |
+| MariaDB | 10.11 | 11.8 | Ubuntu |
+| Redis / Valkey (one per site) | Redis 7 | Valkey | Ubuntu |
+| Node.js | 22, 24, 26 | 22, 24, 26 | nodejs.org (signed checksums, keys vendored) |
+| Python | 3.12 | 3.14 | Ubuntu |
 
 ## How isolation works: each site is its own user
 
-`create` makes the users itself. You are never asked for a name because the names are allocated and never reused. A user who had been deleted could otherwise come back with access to old files. Each site (a *tenant*, `t0001`, `t0002`, …) gets:
+`create --user john` makes the site's own Linux user, `john`. It also makes a second, internal user, `t0001`, which runs the site's PHP or app. Each site (a *tenant*, `t0001`, `t0002`, …) gets:
 
 | Part | What it is | Why |
 |---|---|---|
-| `t0001` | Linux user that **runs** the site's PHP | PHP runs as this user only. It can read the code, write only to `data/` and `tmp/`. |
-| `t0001-deploy` | Linux user that **owns the code** (`app/`), and the SFTP login | A hacked PHP script can't modify the code, so it can't plant a lasting web shell. |
+| `t0001` | Linux user that **runs** the site's PHP or app; it can never log in | It can read the code, and write only to `data/` and `tmp/`. |
+| `john` (your choice; without `--user`: `t0001-deploy`) | Linux user that **owns the code** (`app/`): SSH key login, SFTP and a shell in its own site | A hacked PHP script or app can't modify the code, so it can't plant a lasting web shell. |
 | `/srv/tenants/t0001/` | The site's directory, readable only by its own users | Other sites can't even list it. |
-| `dp-php@t0001` | Its own PHP-FPM service | Its own processes, its own sandbox. One site's crash or overload doesn't affect another. |
+| `dp-php@t0001` / `dp-app@t0001` | Its own PHP-FPM, or its own Node.js/Python app service | Its own processes, its own sandbox. One site's crash or overload doesn't affect another. |
 | `dp-cache@t0001` | Its own Redis or Valkey, on a private socket | No shared cache, so nothing leaks between sites. |
 | `t0001_*` databases and user | Its own MariaDB user, allowed only its own databases | It can't see or touch other sites' data. |
-| sandbox | systemd hardening (score ≤ 2.0), AppArmor profile, seccomp | It can't run programs, see other processes, or read host secrets. |
+| sandbox | systemd hardening, AppArmor (PHP), seccomp | It can't see other processes or read host secrets. PHP can't run programs. |
 | limits | Its own cgroup (CPU, memory, processes) | One site can't starve the server. |
-| network | Firewall rules per site | No access to the server's internal services, cloud metadata or private networks. |
+| network | Firewall rules per site; a reserved app port | No access to the server's internal services, cloud metadata or private networks. No other site can take over its port. |
 
 `sudo site example.com status` shows which tenant a site is, and `sudo site example.com isolation test` proves the isolation live.
 
@@ -227,5 +329,8 @@ PHP and MariaDB versions are the Ubuntu release's own, so they receive Canonical
 | Feature found in some other panels | Status |
 |---|---|
 | Parked or extra domains | Use `create --alias` |
+| PHP versions older than 8.2 | Not offered: they no longer get security updates. |
 | Clone a site, forward or redirect a domain, FastCGI page cache, WordPress multisite conversion | Not built yet |
+| Firewall rule commands, IP and bot blocker, Basic Auth | Not built yet (planned next) |
+| MySQL instead of MariaDB, FTP, Varnish | Not offered |
 | phpMyAdmin | Deliberately not installed: a web login to every database is a common target. Use `db credentials` with a desktop client over an SSH tunnel. |

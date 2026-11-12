@@ -1,6 +1,6 @@
-# Ozenix release signing keys (ssh-keygen -Y verify format).
+# ozenix release signing keys (ssh-keygen -Y verify format).
 # One line per key:
-#   release@domainpilot namespaces="domainpilot-release" ssh-ed25519 AAAA... comment
+#   release@ozenix namespaces="ozenix-release" ssh-ed25519 AAAA... comment
 # A release is valid only if SHA256SUMS.sig verifies against a key listed here.
 # Adding or removing a key is a reviewed change; publish its fingerprint in
 # docs/release.md at the same time. (No key yet: see docs/release.md, "One-time setup".)

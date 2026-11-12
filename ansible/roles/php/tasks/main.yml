@@ -1,27 +1,127 @@
 ---
-- name: Install PHP-FPM and extensions from the Ubuntu archive
+# PHP: several versions side by side (dp_php_versions, default 8.2-8.5); every
+# site picks one (`site <d> create --php 8.4`, `site <d> php 8.2`).
+#
+# The Ubuntu archive has one PHP per release (8.3 on 24.04, 8.5 on 26.04).
+# The other versions come from Ondřej Surý's PPA (the Debian/Ubuntu PHP
+# maintainer): signing key vendored in this repo, fingerprint pinned. The PPA
+# is used only when it publishes packages for this Ubuntu release; until
+# then the host offers the archive version alone (re-run the installer later).
+
+- name: Is the PHP PPA published for this Ubuntu release?
+  ansible.builtin.uri:
+    url: "https://ppa.launchpadcontent.net/ondrej/php/ubuntu/dists/{{ ansible_facts['distribution_release'] }}/Release"
+    method: HEAD
+    timeout: 20
+    status_code: [200, 404]
+  register: php_ppa_release
+  failed_when: false
+  when: dp_php_extra_versions | bool
+
+- name: Decide which PHP versions this host gets
+  ansible.builtin.set_fact:
+    dp_php_installed_versions: >-
+      {{ (dp_php_versions if php_ppa_ok else [dp_php_archive_version])
+         | union([dp_php_version]) | unique | sort }}
+    php_use_ppa: "{{ php_ppa_ok }}"
+  vars:
+    php_ppa_ok: >-
+      {{ (dp_php_extra_versions | bool) and (php_ppa_release.status | default(0)) == 200
+         and (dp_php_versions | difference([dp_php_archive_version]) | length > 0) }}
+
+- name: Default PHP version must be installable
+  ansible.builtin.assert:
+    that: dp_php_version in dp_php_installed_versions
+    fail_msg: >-
+      dp_php_version {{ dp_php_version }} is not available on this host
+      (available: {{ dp_php_installed_versions | join(', ') }}).
+
+- name: PHP PPA signing key and repository
+  when: php_use_ppa | bool
+  block:
+    - name: Install gpg for key fingerprint verification
+      ansible.builtin.apt:
+        name: gpg
+        state: present
+
+    - name: Install the vendored PPA signing key
+      ansible.builtin.copy:
+        src: ondrej-php.asc
+        dest: /usr/share/keyrings/ondrej-php.asc
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Read the key's fingerprints
+      ansible.builtin.command: /usr/bin/gpg --show-keys --with-colons /usr/share/keyrings/ondrej-php.asc
+      register: php_key_info
+      changed_when: false
+
+    - name: Key file contains only the pinned PPA key
+      ansible.builtin.assert:
+        that:
+          - php_key_fprs | length > 0
+          - php_key_fprs | difference([php_ppa_fingerprint]) | length == 0
+        fail_msg: "Unexpected key(s) in the PHP PPA keyring: {{ php_key_fprs }}"
+      vars:
+        php_key_fprs: >-
+          {{ php_key_info.stdout_lines | select('match', '^fpr:') | map('split', ':')
+             | map(attribute=9) | list }}
+
+    - name: Add the PHP PPA
+      ansible.builtin.copy:
+        dest: /etc/apt/sources.list.d/ondrej-php.sources
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          # Managed by ozenix (role php): PHP {{ dp_php_installed_versions | join(', ') }}
+          Types: deb
+          URIs: https://ppa.launchpadcontent.net/ondrej/php/ubuntu
+          Suites: {{ ansible_facts['distribution_release'] }}
+          Components: main
+          Signed-By: /usr/share/keyrings/ondrej-php.asc
+      register: php_repo
+
+    - name: Refresh package lists after adding the PPA
+      ansible.builtin.apt:
+        update_cache: true
+      when: php_repo is changed  # noqa: no-handler
+
+- name: List the packages of every PHP version
+  ansible.builtin.set_fact:
+    # OPcache is built into PHP 8.5; older versions ship it as a package.
+    php_packages: >-
+      {{ (php_packages | default([]))
+         + ((["fpm", "cli"] + (dp_php_extensions | reject("equalto", "opcache") | list)
+             + (["opcache"] if item is version("8.5", "<") else []))
+            | map("regex_replace", "^", "php" ~ item ~ "-") | list) }}
+  loop: "{{ dp_php_installed_versions }}"
+
+- name: Install PHP-FPM and extensions for every version
   ansible.builtin.apt:
     name: "{{ php_packages }}"
     state: present
 
-# The distro service runs ONE shared pool as www-data. Ozenix runs one
-# sandboxed master per tenant instead (Phase 4), so the shared one is masked
-# (package upgrades cannot restart it either).
-- name: Stop and mask the shared PHP-FPM service
+# The distro service runs ONE shared pool as www-data. ozenix runs one
+# sandboxed master per site instead, so the shared ones are masked (package
+# upgrades cannot restart them either).
+- name: Stop and mask the shared PHP-FPM services
   ansible.builtin.systemd_service:
-    name: "php{{ dp_php_version }}-fpm"
+    name: "php{{ item }}-fpm"
     state: stopped
     enabled: false
     masked: true
+  loop: "{{ dp_php_installed_versions }}"
 
-- name: Host-wide PHP-FPM hardening (tenants inherit; pools add per-site limits)
+- name: Host-wide PHP-FPM hardening (sites inherit; pools add per-site limits)
   ansible.builtin.copy:
-    dest: "/etc/php/{{ dp_php_version }}/fpm/conf.d/99-domainpilot.ini"
+    dest: "/etc/php/{{ item }}/fpm/conf.d/99-ozenix.ini"
     owner: root
     group: root
     mode: "0644"
     content: |
-      ; Managed by Ozenix (role php)
+      ; Managed by ozenix (role php)
       expose_php = Off
       display_errors = Off
       display_startup_errors = Off
@@ -38,14 +138,15 @@
       opcache.interned_strings_buffer = 16
       opcache.validate_timestamps = 1
       opcache.revalidate_freq = 2
-      ; Each tenant runs its own master, so OPcache is never shared across tenants.
+      ; Each site runs its own master, so OPcache is never shared across sites.
       opcache.validate_permission = 1
       opcache.validate_root = 1
       opcache.jit = disable
+  loop: "{{ dp_php_installed_versions }}"
 
 - name: Default OPcache sizing (owned by the optimizer afterwards)
   ansible.builtin.copy:
-    dest: "/etc/php/{{ dp_php_version }}/fpm/conf.d/98-domainpilot-tuning.ini"
+    dest: "/etc/php/{{ item }}/fpm/conf.d/98-ozenix-tuning.ini"
     force: false
     owner: root
     group: root
@@ -54,7 +155,16 @@
       ; Installer default. Managed by `site system optimize` from now on.
       opcache.memory_consumption = 128
       opcache.max_accelerated_files = 20000
+  loop: "{{ dp_php_installed_versions }}"
 
 - name: Validate PHP-FPM configuration syntax
-  ansible.builtin.command: /usr/sbin/php-fpm{{ dp_php_version }} -t
+  ansible.builtin.command: /usr/sbin/php-fpm{{ item }} -t
   changed_when: false
+  loop: "{{ dp_php_installed_versions }}"
+
+# Composer for site users (`composer install` in ~/app). Runs as the site user,
+# never as root, through the alias in the site's ~/.profile.
+- name: Composer and the tools it needs
+  ansible.builtin.apt:
+    name: [composer, unzip, git]
+    state: present

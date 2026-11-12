@@ -8,15 +8,15 @@ from typing import Any
 
 import pytest
 
-from domainpilot import health, updates
-from domainpilot.cli import ops_handlers
-from domainpilot.core import fsutil, proc
-from domainpilot.core.errors import ExitCode, OperationFailed, PreconditionFailed, UsageError
-from domainpilot.isolation.limits import TenantLimits
-from domainpilot.optimize import profiles
-from domainpilot.optimize.server import Layout, ServerTuner, parse_db_values, render
-from domainpilot.optimize.site import WorkerStats, measure_workers, recommend_limits
-from domainpilot.optimize.snapshot import SnapshotStore
+from ozenix import health, updates
+from ozenix.cli import ops_handlers
+from ozenix.core import fsutil, proc
+from ozenix.core.errors import ExitCode, OperationFailed, PreconditionFailed, UsageError
+from ozenix.isolation.limits import TenantLimits
+from ozenix.optimize import profiles
+from ozenix.optimize.server import Layout, ServerTuner, parse_db_values, render
+from ozenix.optimize.site import WorkerStats, measure_workers, recommend_limits
+from ozenix.optimize.snapshot import SnapshotStore
 
 MIB = 1024 * 1024
 
@@ -102,7 +102,7 @@ def layout(tmp_path: Path) -> Layout:
     return Layout(
         nginx_events=tmp_path / "nginx" / "tuning-events.conf",
         nginx_http=tmp_path / "nginx" / "tuning-http.conf",
-        mariadb=tmp_path / "mysql" / "98-domainpilot-tuning.cnf",
+        mariadb=tmp_path / "mysql" / "98-ozenix-tuning.cnf",
         php_conf_d=[tmp_path / "php"],
     )
 
@@ -145,7 +145,7 @@ def test_snapshot_restores_owner(tmp_path: Path) -> None:
 
 
 def test_snapshot_prune(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    from domainpilot.optimize import snapshot as snapmod
+    from ozenix.optimize import snapshot as snapmod
 
     monkeypatch.setattr(snapmod, "KEEP", 2)
     store = SnapshotStore(tmp_path / "s")
@@ -175,8 +175,8 @@ def test_server_tuner_apply_and_rollback(tmp_path: Path) -> None:
     assert {Path(c["path"]).name for c in diff} == {
         "tuning-events.conf",
         "tuning-http.conf",
-        "98-domainpilot-tuning.cnf",
-        "98-domainpilot-tuning.ini",
+        "98-ozenix-tuning.cnf",
+        "98-ozenix-tuning.ini",
     }
     snap, warnings = tuner.apply(tuning)
     assert warnings == [] and reloads == [1]
@@ -457,8 +457,8 @@ def test_health_report(tmp_path: Path) -> None:
 def test_site_optimize_and_rollback(
     system: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from domainpilot.sites import lifecycle
-    from domainpilot.sites.lifecycle import CreateRequest
+    from ozenix.sites import lifecycle
+    from ozenix.sites.lifecycle import CreateRequest
 
     mgr = system["manager"]()
     mgr.create(CreateRequest("example.com"))
@@ -485,7 +485,7 @@ def test_site_optimize_and_rollback(
 def test_php_switch(system: dict[str, Any]) -> None:
     from dataclasses import replace
 
-    from domainpilot.sites.lifecycle import CreateRequest
+    from ozenix.sites.lifecycle import CreateRequest
 
     mgr = system["manager"]()
     mgr.create(CreateRequest("example.com"))
@@ -506,9 +506,9 @@ def test_php_switch(system: dict[str, Any]) -> None:
 def _ctx(system: dict[str, Any], domain: str | None = None, dry_run: bool = False) -> Any:
     from conftest import FakeProbe
 
-    from domainpilot.cli.context import Context
-    from domainpilot.core.config import Config
-    from domainpilot.core.output import Output
+    from ozenix.cli.context import Context
+    from ozenix.core.config import Config
+    from ozenix.core.output import Output
 
     ctx = Context(
         paths=system["paths"],

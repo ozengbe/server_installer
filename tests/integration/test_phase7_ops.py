@@ -17,9 +17,9 @@ pytestmark = pytest.mark.integration
 SITE = "/usr/local/bin/site"
 DOMAIN = "p7.example.com"
 TUNING = [
-    Path("/etc/nginx/domainpilot/tuning-events.conf"),
-    Path("/etc/nginx/domainpilot/tuning-http.conf"),
-    Path("/etc/mysql/mariadb.conf.d/98-domainpilot-tuning.cnf"),
+    Path("/etc/nginx/ozenix/tuning-events.conf"),
+    Path("/etc/nginx/ozenix/tuning-http.conf"),
+    Path("/etc/mysql/mariadb.conf.d/98-ozenix-tuning.cnf"),
 ]
 
 
@@ -62,7 +62,7 @@ def http_get(path: str = "/") -> int:
 
 @pytest.fixture(scope="module", autouse=True)
 def clean() -> Iterator[None]:
-    assert Path("/etc/domainpilot-test-vm").is_file(), "test host only"
+    assert Path("/etc/ozenix-test-vm").is_file(), "test host only"
     site(DOMAIN, "delete", "--purge", "--confirm", DOMAIN)
     yield
     site(DOMAIN, "delete", "--purge", "--confirm", DOMAIN)
@@ -117,7 +117,7 @@ def test_optimize_is_idempotent() -> None:
 
 def test_site_optimize_and_rollback() -> None:
     created = site_json(DOMAIN, "create")
-    conf = Path(f"/etc/domainpilot/tenants/{created['tenant']}/php-fpm.conf")
+    conf = Path(f"/etc/ozenix/tenants/{created['tenant']}/php-fpm.conf")
     for _ in range(5):  # give the pool something to measure
         assert http_get() == 200
     before = conf.read_bytes()

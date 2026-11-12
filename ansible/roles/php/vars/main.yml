@@ -1,4 +1,3 @@
 ---
-php_packages: >-
-  {{ ['php' ~ dp_php_version ~ '-fpm', 'php' ~ dp_php_version ~ '-cli']
-     + (dp_php_extensions | map('regex_replace', '^', 'php' ~ dp_php_version ~ '-') | list) }}
+# Launchpad PPA key of Ondřej Surý (ppa:ondrej/php).
+php_ppa_fingerprint: 14AA40EC0831756756D7F66C4F4EA0AAE5267A6C
