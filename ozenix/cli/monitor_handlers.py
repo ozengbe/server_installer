@@ -16,12 +16,13 @@ from ozenix.cli.site_handlers import _domain, _manager
 from ozenix.core import fsutil, proc
 from ozenix.core.errors import DPError, LockBusy, PreconditionFailed, UsageError
 from ozenix.core.locks import FileLock
+from ozenix.core.sysinfo import IDS_UNITS
 from ozenix.monitor import monitor as mon
 from ozenix.monitor.alerts import Alert, AlertSettings, Notifier
 from ozenix.sftp import SftpManager
 
 JOURNALCTL = "/usr/bin/journalctl"
-LOG_UNITS = ("nginx", "mariadb", "fail2ban", "ssh", "dp-backup", "dp-monitor", "dp-php@*")
+LOG_UNITS = ("nginx", "mariadb", "ssh", "dp-backup", "dp-monitor", "dp-php@*")
 
 
 # --- SFTP -------------------------------------------------------------------------------
@@ -106,9 +107,9 @@ def collect(ctx: Context) -> tuple[list[mon.Problem], dict[str, int]]:
             except (OSError, ValueError):
                 state = {}
             problems += mon.backup_problems(state, [(t.id, t.created_at) for t in active.values()])
-        units = [*mon.WATCHED_UNITS, *(f"dp-php@{t}.service" for t in active)]
+        units = [*mon.watched_units(ctx.host().ids), *(f"dp-php@{t}.service" for t in active)]
     else:
-        units = list(mon.WATCHED_UNITS)
+        units = list(mon.watched_units(ctx.host().ids))
     return problems, mon.restart_counts(units)
 
 
@@ -229,7 +230,7 @@ def system_logs(ctx: Context, args: argparse.Namespace) -> CommandResult:
         ]
         return CommandResult({"events": events}, lines or ["No audit events."])
     argv = [JOURNALCTL, "--no-pager", "-o", "short-iso", "-n", str(lines_wanted)]
-    for unit in LOG_UNITS:
+    for unit in (*LOG_UNITS, *IDS_UNITS.get(ctx.host().ids, ())):
         argv += ["-u", unit]
     if args.errors:
         argv += ["-p", "warning"]

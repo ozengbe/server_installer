@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import io
 import socket
 from pathlib import Path
@@ -473,3 +474,14 @@ def test_reload_times_out_without_new_workers(tmp_path: Path) -> None:
         nginx.reload()
     pid_file.write_text("garbage")
     assert nginx._workers() == set()
+
+
+def test_create_reloads_crowdsec_only_when_it_runs(system: dict[str, Any]) -> None:
+    reload = ["/usr/bin/systemctl", "try-reload-or-restart", "crowdsec.service"]
+    mgr = system["manager"]()
+    mgr.create(CreateRequest("a.example.com", site_type="static"))
+    assert reload not in system["calls"]  # fail2ban host: nothing to reload
+    mgr = system["manager"]()
+    mgr.host = dataclasses.replace(mgr.host, ids="crowdsec")
+    mgr.create(CreateRequest("b.example.com", site_type="static"))
+    assert reload in system["calls"]

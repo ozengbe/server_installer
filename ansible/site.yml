@@ -36,8 +36,8 @@
       tags: [mariadb, services]
     - role: cache
       tags: [cache, services]
-    - role: fail2ban
-      tags: [fail2ban, services]
+    - role: ids
+      tags: [ids, fail2ban, crowdsec, services]
     - role: updates
       tags: [updates]
     - role: acme

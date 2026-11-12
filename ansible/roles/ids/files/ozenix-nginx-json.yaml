@@ -1,0 +1,46 @@
+# Managed by ozenix (role ids). Parses the JSON access logs ozenix's nginx
+# writes for every site (log_format dp_json) into the same fields the hub's
+# nginx parser produces, so all HTTP scenarios (crowdsecurity/nginx,
+# base-http-scenarios, http-cve) apply unchanged. The client address is the
+# real visitor IP (nginx restores it from Cloudflare's header).
+name: ozenix/nginx-json-logs
+description: "ozenix nginx JSON access logs (log_format dp_json)"
+filter: "evt.Line.Labels.type == 'ozenix-nginx'"
+onsuccess: next_stage
+nodes:
+  - filter: "UnmarshalJSON(evt.Line.Raw, evt.Unmarshaled, 'access') in ['', nil]"
+    statics:
+      - target: evt.StrTime
+        expression: evt.Unmarshaled.access.time
+      - parsed: remote_addr
+        expression: evt.Unmarshaled.access.remote
+      - parsed: verb
+        expression: evt.Unmarshaled.access.method
+      - parsed: request
+        expression: evt.Unmarshaled.access.uri
+      - parsed: status
+        expression: string(int(evt.Unmarshaled.access.status))
+      - parsed: body_bytes_sent
+        expression: string(int(evt.Unmarshaled.access.bytes))
+      - parsed: http_user_agent
+        expression: evt.Unmarshaled.access.ua
+      - parsed: http_version
+        expression: trimPrefix(evt.Unmarshaled.access.proto, 'HTTP/')
+      - parsed: target_fqdn
+        expression: evt.Unmarshaled.access.host
+      - meta: log_type
+        value: http_access-log
+      - meta: service
+        value: http
+      - meta: source_ip
+        expression: evt.Parsed.remote_addr
+      - meta: http_status
+        expression: evt.Parsed.status
+      - meta: http_path
+        expression: evt.Parsed.request
+      - meta: http_verb
+        expression: evt.Parsed.verb
+      - meta: http_user_agent
+        expression: evt.Parsed.http_user_agent
+      - meta: target_fqdn
+        expression: evt.Parsed.target_fqdn

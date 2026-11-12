@@ -552,3 +552,21 @@ def test_token_handlers(
     fake.zones = []
     with pytest.raises(PreconditionFailed, match="cannot see any zone"):
         cf_handlers.token_add(ctx, argparse.Namespace(label=None))
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://evil.example/client/v4/zones",
+        "https://api.cloudflare.com.evil.example/client/v4",
+        "file:///etc/shadow",
+        cf_api.API,  # the bare base is not an API call
+    ],
+)
+def test_urllib_transport_refuses_other_urls(monkeypatch: pytest.MonkeyPatch, url: str) -> None:
+    def never(*_a: object, **_k: object) -> None:
+        raise AssertionError("must not open the URL")
+
+    monkeypatch.setattr(urllib.request, "urlopen", never)
+    with pytest.raises(cf_api.CloudflareError, match="outside the Cloudflare API"):
+        cf_api.urllib_transport("GET", url, {}, None)

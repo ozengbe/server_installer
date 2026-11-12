@@ -433,6 +433,7 @@ class SiteManager:
                 self._laravel_database(tenant.id)
             cf_note = self._cloudflare_after_create(domain, tenant.id) if req.cloudflare else None
             self._placeholder_after_create(domain)
+            self._ids_watch_new_logs()
             ssl_note = self._autossl_after_create(domain, enabled=req.ssl)
         return {
             "domain": domain,
@@ -585,6 +586,16 @@ class SiteManager:
         if self.reporter:
             self.reporter(f"SSH/SFTP login ready: {result['connect']}", "done")
         return str(result["connect"])
+
+    def _ids_watch_new_logs(self) -> None:
+        """CrowdSec reads site logs by glob; a reload makes it pick up the new
+        site's log at once. Best effort: never fails the creation."""
+        if self.host.ids != "crowdsec":
+            return
+        with contextlib.suppress(DPError):
+            self.run(
+                [SYSTEMCTL, "try-reload-or-restart", "crowdsec.service"], check=False, timeout=60
+            )
 
     def _placeholder_after_create(self, domain: str) -> None:
         """Self-signed certificate so HTTPS answers at once (Cloudflare "Full" mode

@@ -101,6 +101,8 @@ class HostFacts:
     node_versions: tuple[str, ...] = ()
     default_node_version: str = ""
     python_sites: bool = False
+    # Intrusion prevention engine: "crowdsec" or "fail2ban".
+    ids: str = "fail2ban"
 
     @property
     def cache_server(self) -> str:
@@ -116,6 +118,7 @@ _HOST_KEYS: dict[str, type] = {
     "node_versions": list,
     "default_node_version": str,
     "python_sites": bool,
+    "ids": str,
 }
 
 
@@ -146,6 +149,9 @@ def load_host(path: Path) -> HostFacts:
     nginx_user = host.get("nginx_user", "nginx")
     if nginx_user not in ("nginx", "www-data"):
         raise ValidationError(f"{path}: host.nginx_user must be nginx or www-data")
+    ids = host.get("ids", "fail2ban")
+    if ids not in ("crowdsec", "fail2ban"):
+        raise ValidationError(f"{path}: host.ids must be crowdsec or fail2ban")
     nodes = tuple(validate.node_version(v) for v in host.get("node_versions", []))
     default_node = host.get("default_node_version", nodes[0] if nodes else "")
     if nodes and default_node not in nodes:
@@ -159,6 +165,7 @@ def load_host(path: Path) -> HostFacts:
         node_versions=nodes,
         default_node_version=default_node if nodes else "",
         python_sites=bool(host.get("python_sites", False)),
+        ids=ids,
     )
 
 

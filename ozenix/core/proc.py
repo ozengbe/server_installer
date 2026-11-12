@@ -8,7 +8,7 @@ rather than argv.
 from __future__ import annotations
 
 import os
-import subprocess
+import subprocess  # nosec B404  # the single approved process module
 import tempfile
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -72,7 +72,7 @@ def run(
     if timeout <= 0:
         raise ValidationError("timeout must be positive")
     try:
-        completed = subprocess.run(  # noqa: S603 - argv validated above, never a shell
+        completed = subprocess.run(  # noqa: S603  # nosec B603  # argv validated, no shell
             args,
             input=stdin,
             capture_output=True,
@@ -120,7 +120,7 @@ def pipeline(
         raise ValidationError("timeout must be positive")
     errfile = tempfile.TemporaryFile()  # noqa: SIM115 - closed in finally
     try:
-        prod = subprocess.Popen(  # noqa: S603 - argv validated above, never a shell
+        prod = subprocess.Popen(  # noqa: S603  # nosec B603  # argv validated, no shell
             first,
             stdout=subprocess.PIPE,
             stderr=errfile,
@@ -133,7 +133,7 @@ def pipeline(
         errfile.close()
         raise OperationFailed(f"command not found: {first[0]}") from None
     try:
-        cons = subprocess.Popen(  # noqa: S603 - argv validated above, never a shell
+        cons = subprocess.Popen(  # noqa: S603  # nosec B603  # argv validated, no shell
             second,
             stdin=prod.stdout,
             stdout=subprocess.PIPE,

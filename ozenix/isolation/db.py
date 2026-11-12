@@ -78,7 +78,7 @@ def execute(sql: str, run: Runner = proc.run) -> proc.Result:
 def list_databases(tenant: str, run: Runner = proc.run) -> list[str]:
     t = validate.tenant_id(tenant)
     result = execute(
-        "SELECT schema_name FROM information_schema.schemata "
+        "SELECT schema_name FROM information_schema.schemata "  # nosec B608  # validated tenant id
         f"WHERE schema_name LIKE '{t}\\_%';\n",
         run,
     )
@@ -88,7 +88,8 @@ def list_databases(tenant: str, run: Runner = proc.run) -> list[str]:
 def user_exists(tenant: str, run: Runner = proc.run) -> bool:
     t = validate.tenant_id(tenant)
     result = execute(
-        f"SELECT COUNT(*) FROM mysql.user WHERE User='{t}' AND Host='localhost';\n", run
+        f"SELECT COUNT(*) FROM mysql.user WHERE User='{t}' AND Host='localhost';\n",  # nosec B608
+        run,
     )
     return result.stdout.strip() == "1"
 

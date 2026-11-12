@@ -73,7 +73,7 @@ generate_vars() {
   info "First run: installing the ozenix web server stack."
   info "Your current SSH/root login is not changed. Each site gets its own user (site <domain> create --user NAME --key FILE)."
   if [[ -n $admin_ip ]]; then
-    info "Your address $admin_ip will never be banned by fail2ban (dp_fail2ban_ignoreip)."
+    info "Your address $admin_ip will never be blocked by intrusion prevention (dp_fail2ban_ignoreip)."
   fi
   confirm "Continue?" || die "aborted"
 

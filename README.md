@@ -25,7 +25,7 @@ Design and development:
 
 | Task | Command (Git Bash on Windows, or Linux) |
 |---|---|
-| Lint, type-check, unit and security tests | `bash tools/check-docker.sh` (Windows/macOS) or `bash tools/check.sh` (Linux with `pip install -e .[dev]`) |
+| Lint, type-check, unit and security tests, security scans (Bandit, Semgrep, pip-audit, Gitleaks) | `bash tools/check-docker.sh` (Windows/macOS; `--no-security` skips the scans) or `bash tools/check.sh && bash tools/security-scan.sh` (Linux with `pip install -e .[dev]`) |
 | Create a disposable Ubuntu 24.04 test VM | `bash tools/vm.sh up` (requires [Multipass](https://canonical.com/multipass/install)) |
 | Run integration tests in the VM (as root) | `bash tools/vm.sh test` |
 | Destroy the VM | `bash tools/vm.sh down` |

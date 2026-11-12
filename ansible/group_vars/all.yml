@@ -54,8 +54,21 @@ dp_rp_filter: 1
 # /tmp as tmpfs with nodev,nosuid,noexec (takes effect at next boot).
 dp_harden_tmp: true
 
-# Addresses (IPs or CIDRs) fail2ban never bans. The installer adds the IP
-# you ran it from on first run; remove it if your IP is dynamic or shared.
+# Intrusion prevention: "auto" = CrowdSec where its signed repository has
+# packages for this Ubuntu release (24.04 today), fail2ban elsewhere; the
+# installer switches by itself once CrowdSec supports the release. Or force
+# "crowdsec" or "fail2ban".
+dp_ids: auto
+dp_crowdsec_repo: https://packagecloud.io/crowdsec/crowdsec/ubuntu
+# Fingerprint of the vendored key (roles/ids/files/crowdsec.asc).
+dp_crowdsec_fingerprint: 6A89E3C2303A901A889971D3376ED5326E93CD0C
+# Share attack signals (attacker IP, scenario, time) with CrowdSec's community
+# and receive its blocklist in return. Off by default: nothing leaves the server.
+dp_crowdsec_community: false
+
+# Addresses (IPs or CIDRs) intrusion prevention (CrowdSec or fail2ban) never
+# blocks. The installer adds the IP you ran it from on first run; remove it if
+# your IP is dynamic or shared.
 dp_fail2ban_ignoreip: []
 
 # --- Services (Phase 2b). Sizes are conservative; Phase 7 tunes them. ---
@@ -128,7 +141,10 @@ dp_backup_time: "02:30"
 dp_monitoring_node_exporter: true
 # Services that restart themselves after a crash (bounded) and alert when they
 # finally give up. Tenant units (dp-php@, dp-cache@) have this built in.
-dp_monitoring_recovery_units: [nginx, mariadb, fail2ban]
+dp_monitoring_recovery_units: >-
+  {{ ['nginx', 'mariadb']
+     + (['crowdsec', 'crowdsec-firewall-bouncer']
+        if (dp_ids_engine | default('fail2ban')) == 'crowdsec' else ['fail2ban']) }}
 
 # Unattended security upgrades: daily maintenance window (local time).
 # Never reboots; reboot-required is reported by dp-healthcheck.

@@ -75,3 +75,34 @@
     that:
       - dp_fail2ban_ignoreip | select('match', '^[0-9A-Fa-f:.]{2,39}(/[0-9]{1,3})?\Z') | list | length == dp_fail2ban_ignoreip | length
     fail_msg: "dp_fail2ban_ignoreip entries must be IP addresses or CIDR ranges."
+
+# Intrusion prevention engine (used by the ids, isolation and monitoring roles).
+- name: Valid intrusion prevention choice
+  ansible.builtin.assert:
+    that: dp_ids in ['auto', 'crowdsec', 'fail2ban']
+    fail_msg: "dp_ids must be auto, crowdsec or fail2ban (got {{ dp_ids }})."
+
+- name: Is CrowdSec's repository published for this Ubuntu release?
+  ansible.builtin.uri:
+    url: "{{ dp_crowdsec_repo }}/dists/{{ ansible_facts['distribution_release'] }}/Release"
+    method: HEAD
+    timeout: 20
+    status_code: [200, 404]
+  register: ids_crowdsec_release
+  failed_when: false
+  when: dp_ids == 'auto'
+
+- name: Is CrowdSec already installed?
+  ansible.builtin.stat:
+    path: /usr/bin/cscli
+  register: ids_cscli
+
+# A host that runs CrowdSec keeps it (a failed repository check must never
+# switch it back to fail2ban).
+- name: Decide the intrusion prevention engine
+  ansible.builtin.set_fact:
+    dp_ids_engine: >-
+      {{ 'crowdsec' if dp_ids == 'crowdsec'
+         or (dp_ids == 'auto' and (ids_cscli.stat.exists
+                                   or (ids_crowdsec_release.status | default(0)) == 200))
+         else 'fail2ban' }}

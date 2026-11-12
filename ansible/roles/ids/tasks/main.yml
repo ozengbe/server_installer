@@ -1,0 +1,19 @@
+---
+# Intrusion prevention: CrowdSec where its signed apt repository supports this
+# Ubuntu release, fail2ban elsewhere (dp_ids: auto). Re-running the installer
+# switches a host to CrowdSec once the repository supports its release.
+
+- name: Intrusion prevention engine
+  ansible.builtin.debug:
+    msg: >-
+      {{ dp_ids_engine }}{{ ' (CrowdSec has no packages for this Ubuntu release yet;
+      re-run the installer later to switch)' if dp_ids == 'auto' and dp_ids_engine == 'fail2ban' else '' }}
+
+- name: CrowdSec
+  ansible.builtin.include_tasks: crowdsec.yml
+  when: dp_ids_engine == 'crowdsec'
+
+- name: Fail2ban
+  ansible.builtin.include_role:
+    name: fail2ban
+  when: dp_ids_engine == 'fail2ban'

@@ -1,0 +1,21 @@
+# Managed by ozenix (role ids). Addresses never blocked: dp_fail2ban_ignoreip
+# (the installer adds the address it was run from) and the SSH allow lists.
+{% set allow = dp_fail2ban_ignoreip + dp_ssh_allow_v4 + dp_ssh_allow_v6 %}
+name: ozenix/admin-allowlist
+description: "Administrator addresses (anti-lockout)"
+whitelist:
+  reason: "ozenix administrator allowlist"
+{% set ips = allow | reject('search', '/') | list %}
+{% set cidrs = allow | select('search', '/') | list %}
+{% if ips %}
+  ip:
+{% for a in ips %}
+    - "{{ a }}"
+{% endfor %}
+{% endif %}
+{% if cidrs %}
+  cidr:
+{% for a in cidrs %}
+    - "{{ a }}"
+{% endfor %}
+{% endif %}

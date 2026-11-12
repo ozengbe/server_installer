@@ -359,13 +359,25 @@ def check_services(view: HostView, rep: SecurityReport) -> None:
     except OSError:
         aa = ""
     rep.add("AA-ENABLED", aa == "Y", "AppArmor is enabled", threats=("TH1",))
-    rep.add(
-        "F2B-SSHD",
-        view.out("/usr/bin/fail2ban-client", "status", "sshd") is not None,
-        "fail2ban protects SSH",
-        severity="warn",
-        threats=("TH14",),
-    )
+    if view.p("/usr/bin/cscli").exists():
+        collections = view.out("/usr/bin/cscli", "collections", "list", "-o", "raw") or ""
+        rep.add(
+            "IDS-SSH",
+            active("crowdsec")
+            and active("crowdsec-firewall-bouncer")
+            and "crowdsecurity/sshd" in collections,
+            "CrowdSec protects SSH (sshd scenarios and the firewall bouncer are active)",
+            severity="warn",
+            threats=("TH14",),
+        )
+    else:
+        rep.add(
+            "IDS-SSH",
+            view.out("/usr/bin/fail2ban-client", "status", "sshd") is not None,
+            "fail2ban protects SSH",
+            severity="warn",
+            threats=("TH14",),
+        )
     rep.add(
         "UPD-TIMER",
         active("apt-daily-upgrade.timer"),

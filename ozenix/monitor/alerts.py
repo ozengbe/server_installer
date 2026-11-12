@@ -84,11 +84,12 @@ def payload(kind: str, alert: Alert) -> tuple[bytes, dict[str, str]]:
 
 
 def http_send(url: str, data: bytes, headers: dict[str, str]) -> None:
-    request = urllib.request.Request(  # noqa: S310 - scheme validated (https / loopback http)
+    url = validate_url(url)  # again here: https, or http only to a loopback relay
+    request = urllib.request.Request(  # noqa: S310  # nosec B310  # scheme validated above
         url, data=data, headers={"User-Agent": "ozenix-alerts", **headers}, method="POST"
     )
     try:
-        with urllib.request.urlopen(request, timeout=15) as response:  # noqa: S310
+        with urllib.request.urlopen(request, timeout=15) as response:  # noqa: S310  # nosec B310
             if response.status >= 300:
                 raise OperationFailed(f"alert endpoint answered HTTP {response.status}")
     except urllib.error.HTTPError as exc:

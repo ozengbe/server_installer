@@ -14,7 +14,20 @@ from typing import Any
 from ozenix.core import proc
 from ozenix.core.errors import DPError
 
-CORE_SERVICES = ("nginx", "mariadb", "fail2ban", "auditd", "apparmor")
+# Intrusion prevention: CrowdSec where its signed repository supports this Ubuntu
+# release, fail2ban elsewhere (installer: dp_ids, recorded as "ids" in host.toml).
+IDS_UNITS: dict[str, tuple[str, ...]] = {
+    "fail2ban": ("fail2ban",),
+    "crowdsec": ("crowdsec", "crowdsec-firewall-bouncer"),
+}
+
+
+def core_services(ids: str = "fail2ban") -> tuple[str, ...]:
+    """The host services that must be running (critical in health checks)."""
+    return ("nginx", "mariadb", *IDS_UNITS.get(ids, ()), "auditd", "apparmor")
+
+
+CORE_SERVICES = core_services()
 
 
 class SystemProbe:

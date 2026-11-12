@@ -2,6 +2,18 @@
 
 Versions follow `MAJOR.MINOR.PATCH`. Releases are labelled **preview** until all seven security gates in [docs/roadmap.md](docs/roadmap.md) are met.
 
+## Unreleased
+
+### Added (security gate and intrusion prevention)
+- **Security scans in CI** (`tools/security-scan.sh`): Bandit, Semgrep (ozenix rules plus the public Python and secrets rule sets), pip-audit and Gitleaks over the whole history. Any finding fails the build; integration tests wait for it.
+- **CrowdSec** replaces fail2ban where CrowdSec publishes packages for the Ubuntu release (24.04 today; fail2ban stays on 26.04 until then, and the installer switches by itself). Signed repository with a pinned key, apt-pinned to CrowdSec's own packages, security updates through unattended upgrades. Detects SSH brute force and web attacks in every site's log, blocks in its own nftables tables. Nothing is shared with CrowdSec unless `dp_crowdsec_community: true`.
+- `site system security blocks | block | unblock`: list, add and lift blocks on either engine. Loopback, private-network-wide ranges and malformed input are refused; every change is in the audit log.
+
+### Changed
+- The Cloudflare client refuses any URL outside the Cloudflare API, and alert webhooks are re-validated when an alert is sent.
+- The audit check `F2B-SSHD` is now `IDS-SSH` and checks whichever engine runs.
+- pytest 9.0.3 (PYSEC-2026-1845).
+
 ## 0.10.0 — 2026-11 (preview)
 
 First packaged release. Supports Ubuntu 24.04 and 26.04 LTS.

@@ -50,3 +50,29 @@ This is the target state the Ansible installer enforces and `site system audit` 
 
 ## Logging
 - journald persistent with size caps; logrotate for nginx and per-tenant logs; audit log append-only and shipped off-host.
+
+## Secure coding (enforced in CI)
+- Commands run only through `ozenix/core/proc.py`: argv lists, never a shell, a clean environment, mandatory timeouts. No other module may import `subprocess`; `os.system`, `os.popen`, `os.exec*`, `eval`, `exec`, `pickle`, `marshal` and `tempfile.mktemp` are forbidden (`tests/security/test_forbidden_calls.py`, `tools/semgrep/ozenix.yml`).
+- Every outbound HTTP request checks its URL where it is made: the Cloudflare client only calls `https://api.cloudflare.com/client/v4/...`; alert webhooks must be `https://`, or `http://` to a loopback relay.
+- SQL is built only from validated identifiers (tenant ids `t` + 4 digits, database names `[a-z0-9_]`) and passed on stdin.
+- Files are written atomically, created with no-follow and exclusive flags under root-owned parents, and never world-writable.
+- An accepted scanner finding carries an inline `# nosec <id>  # reason` (Bandit) or `# noqa: S<id>` (Ruff) next to the code it covers. No rule is switched off globally.
+
+## Release gate (every phase)
+A phase is complete only when all of these pass or have been reviewed, and `docs/audits/phase-<n>-audit.md` records the result:
+
+| Check | Tool | Where | Fails the build |
+|---|---|---|---|
+| Lint, format, types | Ruff, MyPy (strict) | `tools/check.sh`, CI `checks` | yes |
+| Unit, security and regression tests | pytest (90% coverage minimum) | `tools/check.sh`, CI `checks` | yes |
+| Python security lint | Bandit | `tools/security-scan.sh`, CI `security` | yes, on any finding |
+| Pattern rules | Semgrep: `tools/semgrep/ozenix.yml`, `p/python`, `p/secrets` | same | yes, on any finding |
+| Dependency vulnerabilities | pip-audit (PyPI and OSV advisories) on the pinned dev and CI tools; ozenix itself has no runtime dependencies | same | yes |
+| Secrets in the tree and history | Gitleaks (checksum-pinned release) | same | yes |
+| Shell and Ansible | shellcheck, ansible-lint (production profile), playbook syntax | `tools/check.sh` | yes |
+| Install, idempotence, integration | real Ubuntu host: install twice (second run `changed=0`), full integration suite | CI `integration`, test server | yes |
+| Host hardening | `site system audit`, Lynis, `systemd-analyze security` on dp-* units | test server, reviewed | reviewed |
+| TLS | testssl.sh or SSLyze against a test site | test server, reviewed | reviewed |
+| Web | OWASP ZAP baseline against test sites | test server, reviewed | reviewed |
+
+Safety is not used: its current CLI needs an account. pip-audit checks the same advisory data (PyPI, OSV).

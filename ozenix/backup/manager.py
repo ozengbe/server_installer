@@ -140,7 +140,7 @@ class BackupManager:
     def databases(self, tenant: str) -> list[str]:
         tenant = validate.tenant_id(tenant)  # "t" + 4 digits: nothing to escape
         sql = (
-            "SELECT schema_name FROM information_schema.schemata "  # noqa: S608
+            "SELECT schema_name FROM information_schema.schemata "  # noqa: S608  # nosec B608  # validated tenant id
             f"WHERE schema_name LIKE '{tenant}\\_%' ORDER BY schema_name;\n"
         )
         out = self.run([MARIADB, "--batch", "--skip-column-names"], stdin=sql, timeout=60).stdout

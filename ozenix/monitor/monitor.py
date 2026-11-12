@@ -20,13 +20,21 @@ from typing import Any
 
 from ozenix.core import fsutil, proc
 from ozenix.core.errors import DPError
+from ozenix.core.sysinfo import IDS_UNITS
 from ozenix.health import Report
 from ozenix.monitor.alerts import Alert, Notifier
 
 Runner = Callable[..., proc.Result]
 Prober = Callable[[str], int | None]
 SYSTEMCTL = "/usr/bin/systemctl"
-WATCHED_UNITS = ("nginx.service", "mariadb.service", "fail2ban.service")
+WATCHED_UNITS = ("nginx.service", "mariadb.service")
+
+
+def watched_units(ids: str) -> tuple[str, ...]:
+    """Host units whose restarts are counted (the intrusion prevention ones included)."""
+    return (*WATCHED_UNITS, *(f"{u}.service" for u in IDS_UNITS.get(ids, ())))
+
+
 BACKUP_WARN_HOURS = 26
 BACKUP_CRITICAL_HOURS = 50
 DRILL_WARN_DAYS = 8

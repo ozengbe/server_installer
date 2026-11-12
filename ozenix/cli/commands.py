@@ -154,6 +154,18 @@ def _token_label_arg(p: argparse.ArgumentParser) -> None:
     p.add_argument("label")
 
 
+def _ids_target_arg(p: argparse.ArgumentParser) -> None:
+    p.add_argument("target", help="IP address or CIDR range (e.g. 192.0.2.10, 198.51.100.0/24)")
+
+
+def _ids_block_args(p: argparse.ArgumentParser) -> None:
+    _ids_target_arg(p)
+    p.add_argument(
+        "--for", dest="duration", default="24h", help="how long: 30m, 12h, 7d (default 24h)"
+    )
+    p.add_argument("--reason", default="manual block", help="short note kept with the block")
+
+
 def _logs_args(p: argparse.ArgumentParser) -> None:
     group = p.add_mutually_exclusive_group()
     group.add_argument("--access", dest="kind", action="store_const", const="access")
@@ -638,6 +650,32 @@ COMMANDS: tuple[CommandSpec, ...] = (
         security_handlers.system_security,
     ),
     CommandSpec(SY, ("audit",), "R", 9, "Full configuration audit", security_handlers.system_audit),
+    CommandSpec(
+        SY,
+        ("security", "blocks"),
+        "R",
+        11,
+        "Addresses blocked by intrusion prevention",
+        security_handlers.ids_blocks,
+    ),
+    CommandSpec(
+        SY,
+        ("security", "block"),
+        "M",
+        11,
+        "Block an IP address or range",
+        security_handlers.ids_block,
+        configure=_ids_block_args,
+    ),
+    CommandSpec(
+        SY,
+        ("security", "unblock"),
+        "M",
+        11,
+        "Lift every block on an IP address or range",
+        security_handlers.ids_unblock,
+        configure=_ids_target_arg,
+    ),
     CommandSpec(
         SY,
         ("optimize",),

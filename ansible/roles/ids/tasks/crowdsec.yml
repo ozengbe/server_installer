@@ -1,0 +1,203 @@
+---
+# CrowdSec (detection) + its nftables bouncer (blocking).
+#   - packages from CrowdSec's own repository: vendored signing key with a
+#     pinned fingerprint, and apt pinning that lets this repository provide
+#     only the CrowdSec packages;
+#   - the local API listens on 127.0.0.1 only (tenants cannot reach loopback);
+#   - the bouncer uses its own nftables tables (crowdsec, crowdsec6); ozenix's
+#     "inet ozenix" table is never touched;
+#   - nothing is shared with CrowdSec's community unless dp_crowdsec_community.
+
+- name: Install gpg for key fingerprint verification
+  ansible.builtin.apt:
+    name: gpg
+    state: present
+
+- name: Install the vendored CrowdSec repository key
+  ansible.builtin.copy:
+    src: crowdsec.asc
+    dest: /usr/share/keyrings/ozenix-crowdsec.asc
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Read the key's fingerprints
+  ansible.builtin.command: /usr/bin/gpg --show-keys --with-colons /usr/share/keyrings/ozenix-crowdsec.asc
+  register: ids_key_info
+  changed_when: false
+
+- name: Key file contains only the pinned CrowdSec key
+  ansible.builtin.assert:
+    that:
+      - ids_key_fprs | length > 0
+      - dp_crowdsec_fingerprint in ids_key_fprs
+      # The primary key and its signing subkey, nothing else.
+      - ids_key_info.stdout_lines | select('match', '^pub:') | list | length == 1
+    fail_msg: "Unexpected key(s) in the CrowdSec keyring: {{ ids_key_fprs }}"
+  vars:
+    ids_key_fprs: >-
+      {{ ids_key_info.stdout_lines | select('match', '^fpr:') | map('split', ':')
+         | map(attribute=9) | list }}
+
+- name: Only CrowdSec packages may come from CrowdSec's repository
+  ansible.builtin.copy:
+    dest: /etc/apt/preferences.d/ozenix-crowdsec
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Managed by ozenix (role ids).
+      Package: crowdsec crowdsec-firewall-bouncer-nftables
+      Pin: origin packagecloud.io
+      Pin-Priority: 500
+
+      Package: *
+      Pin: origin packagecloud.io
+      Pin-Priority: -1
+
+- name: Add CrowdSec's repository
+  ansible.builtin.copy:
+    dest: /etc/apt/sources.list.d/ozenix-crowdsec.sources
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Managed by ozenix (role ids): CrowdSec and its firewall bouncer.
+      Types: deb
+      URIs: {{ dp_crowdsec_repo }}
+      Suites: {{ ansible_facts['distribution_release'] }}
+      Components: main
+      Signed-By: /usr/share/keyrings/ozenix-crowdsec.asc
+  register: ids_repo
+
+- name: Refresh package lists after adding the repository
+  ansible.builtin.apt:
+    update_cache: true
+  when: ids_repo is changed  # noqa: no-handler
+
+- name: Security updates for CrowdSec arrive with the daily unattended upgrades
+  ansible.builtin.copy:
+    dest: /etc/apt/apt.conf.d/52ozenix-crowdsec
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      // Managed by ozenix (role ids).
+      Unattended-Upgrade::Origins-Pattern:: "origin=packagecloud.io/crowdsec/crowdsec,label=crowdsec";
+
+- name: Stop fail2ban (replaced by CrowdSec)
+  ansible.builtin.systemd_service:
+    name: fail2ban
+    state: stopped
+    enabled: false
+  failed_when: false
+
+- name: Remove fail2ban
+  ansible.builtin.apt:
+    name: fail2ban
+    state: absent
+    purge: true
+
+- name: Drop-in directory for the CrowdSec service
+  ansible.builtin.file:
+    path: /etc/systemd/system/crowdsec.service.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+# Before the package is installed: its post-install script starts the service.
+- name: Community sharing off unless dp_crowdsec_community (no signals leave the server)
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/crowdsec.service.d/10-ozenix.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Managed by ozenix (role ids): -no-capi = no signals sent to and no
+      # blocklist received from CrowdSec's central API (dp_crowdsec_community).
+      [Service]
+      ExecStart=
+      ExecStart=/usr/bin/crowdsec -c /etc/crowdsec/config.yaml -no-capi
+  when: not (dp_crowdsec_community | bool)
+  register: ids_dropin_on
+
+- name: Community sharing on
+  ansible.builtin.file:
+    path: /etc/systemd/system/crowdsec.service.d/10-ozenix.conf
+    state: absent
+  when: dp_crowdsec_community | bool
+  register: ids_dropin_off
+
+- name: Apply the service drop-in
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+  when: ids_dropin_on is changed or ids_dropin_off is changed  # noqa: no-handler
+  notify: Restart crowdsec
+
+- name: Install CrowdSec and the nftables bouncer
+  ansible.builtin.apt:
+    name: [crowdsec, crowdsec-firewall-bouncer-nftables]
+    state: present
+
+- name: Detection rules for nginx and web attacks
+  ansible.builtin.command:
+    argv: [/usr/bin/cscli, collections, install, crowdsecurity/nginx,
+           crowdsecurity/base-http-scenarios, crowdsecurity/http-cve, crowdsecurity/sshd]
+  register: ids_collections
+  changed_when: "'Nothing to install' not in (ids_collections.stdout + ids_collections.stderr)"
+  notify: Reload crowdsec
+
+- name: Parser for ozenix's JSON access logs
+  ansible.builtin.copy:
+    src: ozenix-nginx-json.yaml
+    dest: /etc/crowdsec/parsers/s01-parse/ozenix-nginx-json.yaml
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload crowdsec
+
+- name: Does the package's generated configuration already read the SSH log file?
+  ansible.builtin.stat:
+    path: /var/log/auth.log
+  register: ids_auth_log
+
+- name: Log sources (site access logs, nginx errors, SSH)
+  ansible.builtin.template:
+    src: acquis-ozenix.yaml.j2
+    dest: /etc/crowdsec/acquis.d/ozenix.yaml
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload crowdsec
+
+- name: Addresses CrowdSec never blocks (anti-lockout)
+  ansible.builtin.template:
+    src: whitelist-ozenix.yaml.j2
+    dest: /etc/crowdsec/parsers/s02-enrich/ozenix-whitelist.yaml
+    owner: root
+    group: root
+    mode: "0644"
+  when: ids_allow | length > 0
+  notify: Reload crowdsec
+  vars:
+    ids_allow: "{{ dp_fail2ban_ignoreip + dp_ssh_allow_v4 + dp_ssh_allow_v6 }}"
+
+- name: No allowlist file without entries
+  ansible.builtin.file:
+    path: /etc/crowdsec/parsers/s02-enrich/ozenix-whitelist.yaml
+    state: absent
+  when: (dp_fail2ban_ignoreip + dp_ssh_allow_v4 + dp_ssh_allow_v6) | length == 0
+  notify: Reload crowdsec
+
+- name: Validate the CrowdSec configuration
+  ansible.builtin.command: /usr/bin/crowdsec -c /etc/crowdsec/config.yaml -t -error
+  changed_when: false
+
+- name: Enable CrowdSec and the bouncer
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    enabled: true
+    state: started
+    daemon_reload: true
+  loop: [crowdsec, crowdsec-firewall-bouncer]

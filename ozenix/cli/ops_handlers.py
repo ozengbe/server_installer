@@ -12,6 +12,7 @@ from ozenix.cli.context import CommandResult, Context
 from ozenix.cli.site_handlers import _domain, _manager
 from ozenix.core import proc
 from ozenix.core.errors import DPError, ExitCode, UsageError
+from ozenix.core.sysinfo import core_services
 from ozenix.optimize import profiles
 from ozenix.optimize.server import Layout, ServerTuner
 from ozenix.optimize.snapshot import SnapshotStore
@@ -228,6 +229,7 @@ def _health_report(ctx: Context) -> health_mod.Report:
         certificates=certs,
         pending_security=security,
         firewall_pending=ctx.paths.firewall_pending.exists(),
+        services=core_services(ctx.host().ids),
     )
 
 

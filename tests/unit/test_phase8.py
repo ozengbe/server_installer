@@ -1069,3 +1069,12 @@ def test_secret_files_are_tightened_on_load(tmp_path: Path) -> None:
     cred.chmod(0o644)  # e.g. written by an older version
     assert store.load("k") == "value"
     assert stat.S_IMODE(cred.stat().st_mode) == 0o600
+
+
+@pytest.mark.parametrize(
+    "url", ["file:///etc/passwd", "http://example.com/hook", "ftp://example.com/x"]
+)
+def test_http_send_revalidates_the_url(url: str) -> None:
+    # Defence in depth: the stored URL is checked again when an alert is sent.
+    with pytest.raises(ValidationError):
+        al.http_send(url, b"{}", {})

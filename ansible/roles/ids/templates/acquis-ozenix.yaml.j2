@@ -1,0 +1,24 @@
+# Managed by ozenix (role ids). Log sources for CrowdSec.
+# Every site's access log (JSON, real visitor IP), parsed by ozenix/nginx-json-logs.
+# `site <domain> create` reloads CrowdSec so a new site's log is picked up at once.
+filenames:
+  - /var/log/nginx/ozenix/*/access.log
+  - /var/log/nginx/access.log
+labels:
+  type: ozenix-nginx
+---
+# nginx error logs (rate-limit hits, malformed requests).
+filenames:
+  - /var/log/nginx/error.log
+  - /var/log/nginx/ozenix/*/error.log
+labels:
+  type: nginx
+{% if not ids_auth_log.stat.exists %}
+---
+# No /var/log/auth.log on this host: read SSH events from the journal.
+source: journalctl
+journalctl_filter:
+  - "_SYSTEMD_UNIT=ssh.service"
+labels:
+  type: syslog
+{% endif %}

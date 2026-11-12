@@ -34,9 +34,11 @@ class CloudflareError(Exception):
 def urllib_transport(
     method: str, url: str, headers: dict[str, str], body: bytes | None
 ) -> tuple[int, dict[str, Any]]:
-    req = urllib.request.Request(url, data=body, headers=headers, method=method)  # noqa: S310 - fixed https API URL
+    if not url.startswith(API + "/"):
+        raise CloudflareError("refusing a request outside the Cloudflare API")
+    req = urllib.request.Request(url, data=body, headers=headers, method=method)  # noqa: S310  # nosec B310  # https API URL, checked above
     try:
-        with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:  # noqa: S310
+        with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:  # noqa: S310  # nosec B310
             return resp.status, json.loads(resp.read() or b"{}")
     except urllib.error.HTTPError as exc:
         try:

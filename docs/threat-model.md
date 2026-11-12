@@ -53,7 +53,7 @@ Status: **PROPOSED**. Method: asset- and trust-boundary-based, with STRIDE appli
 | TH11 | B1 | Host-header / unknown-vhost abuse, exposing a default site (I) | Default server returns 444 with `ssl_reject_handshake` | NGX-DEFAULT |
 | TH12 | B1 | Direct-to-origin bypass of Cloudflare WAF (S/D) | Origin allowlist of CF ranges, per-zone Authenticated Origin Pulls, `real_ip` trusted only from CF | CF-ORIGIN-* |
 | TH13 | B1 | Spoofed `X-Forwarded-For` / `CF-Connecting-IP` (S) | `set_real_ip_from` restricted to verified ranges; header ignored otherwise | NGX-REALIP |
-| TH14 | B2 | SSH brute force / weak config (S/E) | Key-only auth, `AllowGroups`, modern KEX/ciphers, fail2ban, optional WireGuard-only | SSH-* |
+| TH14 | B2 | SSH brute force / weak config (S/E) | Key-only auth, `AllowGroups`, modern KEX/ciphers, CrowdSec (fail2ban where CrowdSec has no packages), optional WireGuard-only | SSH-*, IDS-SSH |
 | TH15 | B2 | SFTP user escapes chroot, gets a shell, or uses forwarding (E) | `ForceCommand internal-sftp`, root-owned chroot, `AllowTcpForwarding no`, `PermitTunnel no`, `X11Forwarding no`, `AllowAgentForwarding no` | SFTP-* |
 | TH16 | B7 | Leaked Cloudflare token (E) | Per-zone least-privilege tokens, `systemd-creds` encryption, never logged, IP-restricted tokens where possible | SEC-SECRETS |
 | TH17 | B7 | Malicious package/repo (T5) | Signed repos with pinned key fingerprints in `signed-by=`, apt pinning, stdlib-only CLI, no `curl \| bash`, checksum + signature on any binary download | SUPPLY-* |

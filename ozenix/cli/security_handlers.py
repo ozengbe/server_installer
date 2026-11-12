@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import json
+from dataclasses import asdict
 from typing import Any
 
 from ozenix.cli.context import CommandResult, Context
@@ -14,6 +15,13 @@ from ozenix.core import fsutil
 from ozenix.core.errors import DPError, ExitCode, PreconditionFailed
 from ozenix.isolation import db
 from ozenix.security.host_audit import audit_host
+from ozenix.security.ids import (
+    Ids,
+    as_dicts,
+    parse_target,
+    validate_duration,
+    validate_reason,
+)
 from ozenix.security.isolation_test import IsolationTester, evaluate
 from ozenix.security.report import Finding, SecurityReport
 from ozenix.security.site_audit import SiteAuditor, SiteFacts
@@ -124,3 +132,55 @@ def system_security(ctx: Context, args: argparse.Namespace) -> CommandResult:
     out = _result(rep, verbose=False)
     out.text.append("Residual risks that no check can remove: see docs/security-report.md")
     return out
+
+
+# --- intrusion prevention (CrowdSec or fail2ban) -------------------------------------------
+
+
+def _ids(ctx: Context) -> Ids:
+    return Ids(ctx.host().ids)
+
+
+def ids_blocks(ctx: Context, _args: argparse.Namespace) -> CommandResult:
+    ids = _ids(ctx)
+    blocks = ids.blocks()
+    lines = [f"Intrusion prevention: {ids.engine}. Blocked: {len(blocks)}."]
+    lines += [
+        f"  {b.target:<40} {b.reason:<40} {b.origin:<10} {b.duration}".rstrip() for b in blocks
+    ]
+    return CommandResult({"engine": ids.engine, "blocks": as_dicts(blocks)}, lines)
+
+
+def ids_block(ctx: Context, args: argparse.Namespace) -> CommandResult:
+    target, _ = parse_target(args.target)
+    duration = validate_duration(args.duration)
+    reason = validate_reason(args.reason)
+    if ctx.dry_run:
+        return CommandResult(
+            {"target": target, "duration": duration, "dry_run": True},
+            [f"Would block {target} for {duration} ({reason})."],
+        )
+    block = _ids(ctx).block(target, duration=duration, reason=reason)
+    ctx.audit().record("ids.block", argv=ctx.argv, outcome="success", details=asdict(block))
+    return CommandResult(asdict(block), [f"Blocked {block.target} for {block.duration}."])
+
+
+def ids_unblock(ctx: Context, args: argparse.Namespace) -> CommandResult:
+    target, _ = parse_target(args.target)
+    if ctx.dry_run:
+        return CommandResult(
+            {"target": target, "dry_run": True}, [f"Would lift every block on {target}."]
+        )
+    removed = _ids(ctx).unblock(target)
+    ctx.audit().record(
+        "ids.unblock",
+        argv=ctx.argv,
+        outcome="success",
+        details={"target": target, "removed": removed},
+    )
+    text = (
+        f"Unblocked {target} ({removed} block(s) removed)."
+        if removed
+        else f"{target} was not blocked."
+    )
+    return CommandResult({"target": target, "removed": removed}, [text])

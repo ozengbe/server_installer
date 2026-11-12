@@ -351,7 +351,7 @@ def test_host_audit_finds_drift(tmp_path: Path) -> None:
         "SSH-PASSWORDAUTHENTICATION", "FW-DEFAULT-DENY", "FW-TENANT-EGRESS",
         "FW-PENDING", "NET-LISTENERS", "KERN-SYSCTL", "DB-NO-TCP", "DB-LOCAL-INFILE",
         "DB-ACCOUNTS", "DB-TENANT-GLOBAL", "PERM-ETC", "AUDIT-APPEND-ONLY", "AA-ENABLED",
-        "F2B-SSHD", "UPD-TIMER", "NGX-TOKENS", "NGX-REALIP", "NGX-TLS-PROTOCOLS",
+        "IDS-SSH", "UPD-TIMER", "NGX-TOKENS", "NGX-REALIP", "NGX-TLS-PROTOCOLS",
         "BKP-OFFSITE", "MON-ALERTS",
     }  # fmt: skip
     assert expected <= failed, expected - failed

@@ -38,10 +38,11 @@ def check(
     pending_security: int | None = None,
     firewall_pending: bool = False,
     disks: tuple[str, ...] = ("/", "/srv", "/var/lib/mysql"),
+    services: Sequence[str] = CORE_SERVICES,
     meminfo: Path = Path("/proc/meminfo"),
 ) -> Report:
     r = Report()
-    for svc in CORE_SERVICES:
+    for svc in services:
         state = probe.service_state(svc)
         r.add("ok" if state == "active" else "critical", "service", f"{svc} is {state}")
     ssh = probe.ssh_state()

@@ -86,7 +86,7 @@ _MIGRATIONS: Sequence[str] = (
     DROP TABLE sites;
     ALTER TABLE sites_v3 RENAME TO sites;
     CREATE INDEX sites_tenant ON sites(tenant_id);
-    """,  # noqa: S608
+    """,  # noqa: S608  # nosec B608  # constant SITE_TYPES only
 )
 
 

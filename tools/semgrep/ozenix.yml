@@ -1,0 +1,79 @@
+# ozenix secure-coding rules (docs/security-baseline.md, "Secure coding").
+# Run by tools/security-scan.sh; any finding fails CI.
+rules:
+  - id: ozenix-no-shell-true
+    languages: [python]
+    severity: ERROR
+    message: shell=True is forbidden; pass an argv list to ozenix.core.proc.run
+    pattern-either:
+      - pattern: $F(..., shell=True, ...)
+
+  - id: ozenix-subprocess-only-in-proc
+    languages: [python]
+    severity: ERROR
+    message: only ozenix/core/proc.py may use subprocess; call ozenix.core.proc instead
+    paths:
+      include: ["ozenix/"]
+      exclude: ["ozenix/core/proc.py"]
+    pattern-either:
+      - pattern: import subprocess
+      - pattern: from subprocess import $X
+      - pattern: subprocess.$F(...)
+
+  - id: ozenix-no-os-exec
+    languages: [python]
+    severity: ERROR
+    message: os.system / os.popen / os.exec* / os.spawn* are forbidden
+    patterns:
+      - pattern: os.$EXEC(...)
+      - metavariable-regex:
+          metavariable: $EXEC
+          regex: ^(system|popen|exec[lv]p?e?|spawn[lv]p?e?)$
+
+  - id: ozenix-no-unsafe-deserialization
+    languages: [python]
+    severity: ERROR
+    message: unsafe deserialization (pickle/marshal/shelve/yaml.load) is forbidden
+    pattern-either:
+      - pattern: pickle.$F(...)
+      - pattern: marshal.$F(...)
+      - pattern: shelve.open(...)
+      - pattern: yaml.load(...)
+      - pattern: yaml.unsafe_load(...)
+
+  - id: ozenix-no-eval
+    languages: [python]
+    severity: ERROR
+    message: eval/exec/compile of runtime data is forbidden
+    pattern-either:
+      - pattern: eval(...)
+      - pattern: exec(...)
+      - pattern: compile(...)
+
+  - id: ozenix-no-insecure-temp
+    languages: [python]
+    severity: ERROR
+    message: tempfile.mktemp is racy; use fsutil or tempfile.mkstemp/TemporaryDirectory
+    pattern: tempfile.mktemp(...)
+
+  - id: ozenix-no-tls-verify-off
+    languages: [python]
+    severity: ERROR
+    message: TLS verification must never be disabled
+    pattern-either:
+      - pattern: ssl._create_unverified_context(...)
+      - pattern: ssl.create_default_context(...).check_hostname = False
+      - pattern: $CTX.verify_mode = ssl.CERT_NONE
+
+  - id: ozenix-no-world-writable-chmod
+    languages: [python]
+    severity: ERROR
+    message: world-writable permissions are forbidden
+    patterns:
+      - pattern-either:
+          - pattern: os.chmod($P, $M)
+          - pattern: $P.chmod($M)
+          - pattern: os.fchmod($P, $M)
+      - metavariable-comparison:
+          metavariable: $M
+          comparison: $M & 0o002 != 0

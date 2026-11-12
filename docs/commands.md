@@ -248,6 +248,19 @@ sudo site system security
 sudo site system audit
 ```
 
+### Intrusion prevention (CrowdSec or fail2ban)
+
+The installer uses CrowdSec where its signed repository has packages for your Ubuntu release (24.04 today), and fail2ban elsewhere. Re-running the installer switches to CrowdSec once your release is supported. CrowdSec reads SSH and every site's nginx log, detects brute force, vulnerability scanners and known exploits (Log4Shell, path traversal, sensitive-file probing and more), and blocks the address in the firewall. The address you installed from is never blocked (`dp_fail2ban_ignoreip` in `/etc/ozenix/install.yml`).
+
+```bash
+sudo site system security blocks                          # who is blocked, why, for how long
+sudo site system security block 203.0.113.9 --for 7d --reason "scanner"
+sudo site system security block 198.51.100.0/24           # a range (CrowdSec only)
+sudo site system security unblock 203.0.113.9
+```
+
+By default nothing is sent to CrowdSec: its community sharing (attacker IPs in exchange for the community blocklist) is off. Turn it on with `dp_crowdsec_community: true` in `/etc/ozenix/install.yml` and re-run the installer.
+
 ## Cloudflare (optional)
 
 ozenix works behind Cloudflare without any token: you create the DNS records yourself. A token is needed only if ozenix should create the records itself, validate certificates through DNS, or review the zone's settings.

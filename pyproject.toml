@@ -13,7 +13,7 @@ dependencies = []
 [project.optional-dependencies]
 # Development tooling only. Never installed on servers.
 dev = [
-  "pytest==8.3.4",
+  "pytest==9.0.3",
   "pytest-cov==6.0.0",
   "mypy==1.13.0",
   "ruff==0.8.4",
@@ -56,3 +56,8 @@ ignore = ["N818"]
 # The mariadb CLI has no parameter binding; every identifier is validated
 # (validate.tenant_id / db_name) and passwords are token_urlsafe before use.
 "ozenix/isolation/db.py" = ["S608"]
+
+[tool.bandit]
+# Run by tools/security-scan.sh over ozenix/ only. No test is skipped: every
+# accepted finding carries an inline "# nosec <id> - reason" next to the code.
+exclude_dirs = ["tests"]

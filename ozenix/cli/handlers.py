@@ -9,7 +9,7 @@ from typing import Any
 from ozenix.cli.context import CommandResult, Context
 from ozenix.core.errors import ExitCode, PreconditionFailed
 from ozenix.core.output import table
-from ozenix.core.sysinfo import CORE_SERVICES
+from ozenix.core.sysinfo import core_services
 
 DISK_WARN_RATIO = 0.90
 
@@ -86,7 +86,7 @@ def site_status(ctx: Context, _args: argparse.Namespace) -> CommandResult:
 def system_status(ctx: Context, _args: argparse.Namespace) -> CommandResult:
     probe = ctx.probe
     summary = probe.summary()
-    services = {name: probe.service_state(name) for name in CORE_SERVICES}
+    services = {name: probe.service_state(name) for name in core_services(ctx.host().ids)}
     services["ssh"] = probe.ssh_state()
     disks = {path: probe.disk(path) for path in ("/", "/srv", "/var/lib/mysql")}
     firewall = {

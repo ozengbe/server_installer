@@ -26,10 +26,22 @@ jobs:
           mkdir dist/x && tar -xzf dist/ozenix-*.tar.gz -C dist/x
           cd dist/x/ozenix-* && sha256sum --quiet --strict -c MANIFEST.sha256
 
+  security:
+    # Release gate: Bandit, Semgrep, pip-audit and Gitleaks. Any finding fails CI.
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0  # Gitleaks scans the whole history
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: bash tools/ci/step.sh "security scan" plain -- bash tools/security-scan.sh
+
   integration:
     # GitHub-hosted runners are disposable Ubuntu 24.04 VMs with systemd and sudo.
     # Failures are summarised as annotations on the run page (tools/ci/step.sh).
-    needs: checks
+    needs: [checks, security]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5

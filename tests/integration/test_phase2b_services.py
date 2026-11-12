@@ -169,14 +169,23 @@ def test_mariadb_no_anonymous_or_remote_root() -> None:
 # --- fail2ban ---------------------------------------------------------------
 
 
+def _uses_fail2ban() -> bool:
+    host = Path("/etc/ozenix/host.toml")
+    return not host.exists() or 'ids = "crowdsec"' not in host.read_text()
+
+
+fail2ban_only = pytest.mark.skipif(not _uses_fail2ban(), reason="host uses CrowdSec (Phase 11)")
+
+
+@fail2ban_only
 @pytest.mark.parametrize("jail", ["sshd", "nginx-limit-req", "recidive"])
 def test_fail2ban_jail_running(jail: str) -> None:
     run("/usr/bin/fail2ban-client", "status", jail)
 
 
-def test_fail2ban_uses_own_nft_table_not_ours() -> None:
+def test_intrusion_prevention_uses_own_nft_table_not_ours() -> None:
     dump = run("/usr/sbin/nft", "list", "table", "inet", "ozenix").stdout
-    assert "f2b" not in dump
+    assert "f2b" not in dump and "crowdsec" not in dump
 
 
 # --- updates ----------------------------------------------------------------
